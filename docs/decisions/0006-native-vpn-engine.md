@@ -13,7 +13,7 @@ Flutter cannot create VPN tunnels; that needs Android `VpnService` and an iOS Pa
 - **wstunnel client:** run in-process, listening on `127.0.0.1:<port>`, with WireGuard's endpoint pointed at it.
   - Target build: a small Rust crate `native/wstunnel_ffi` that wraps the `wstunnel` crate (pinned to 10.5.2) and exposes a C API (`start(config)`, `stop()`). It is built with `cargo-ndk` for Android and as an XCFramework for iOS.
   - Android spike shortcut: package the official Android binary as `libwstunnel.so` and run it from `nativeLibraryDir`.
-- **Routing loop:** prevented by excluding the server IPs from the tunnel routes. The client connects by IP with SNI/Host set to `vpn.petrixon.com`, so it does not depend on DNS during startup.
+- **Routing loop:** prevented by excluding the server IPs from the tunnel routes. The client connects by IP with SNI/Host set to `vpn.radarcut.com`, so it does not depend on DNS during startup.
 
 ## Spike acceptance criteria (Phase 2)
 

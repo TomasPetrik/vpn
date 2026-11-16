@@ -19,9 +19,9 @@ flowchart LR
     engine["Native VPN engine: WireGuard + wstunnel client"]
   end
   subgraph vps["VPS 72.61.158.103"]
-    apache["Apache :443, vhost vpn.petrixon.com (new)"]
+    apache["Apache :443, vhost vpn.radarcut.com (new)"]
     api["vpn-api, Go, 127.0.0.1:8090 (new)"]
-    pg[("PostgreSQL 16, db vpn (new)")]
+    db[("MySQL 8.0, db vpn (new)")]
     wst["wstunnel server :8080 (existing)"]
     wg1["wg1 10.201.0.0/16 UDP 51821 (new)"]
     wg0["wg0 10.200.200.0/24 UDP 51820 (existing)"]
@@ -30,7 +30,7 @@ flowchart LR
   mac["MacBook (existing)"]
   ui -- "HTTPS /api/v1" --> apache
   apache --> api
-  api --> pg
+  api --> db
   api -- "wgctrl / netlink" --> wg1
   engine -- "wss /prefix" --> apache
   apache -- "ws" --> wst
@@ -46,9 +46,9 @@ flowchart LR
 | --- | --- | --- |
 | Flutter app | iOS, Android | new |
 | Native VPN engine (wireguard-go + embedded wstunnel client) | Android `VpnService`, iOS Packet Tunnel extension | new |
-| Apache vhost `vpn.petrixon.com` (TLS, reverse proxy) | VPS :443 | Apache existing, vhost new |
+| Apache vhost `vpn.radarcut.com` (TLS, reverse proxy) | VPS :443 | Apache existing, vhost new |
 | `vpn-api`: REST API, admin panel, peer provisioning | VPS `127.0.0.1:8090`, systemd | new |
-| PostgreSQL database `vpn` | VPS localhost | server existing, database new |
+| MySQL database `vpn` | VPS localhost (MySQL 8.0.46) | server existing, database new |
 | wstunnel server 10.5.2 | VPS :8080 | existing, reused |
 | WireGuard `wg1` for app clients | VPS, UDP 51821 reachable only from localhost | new |
 | WireGuard `wg0` for the owner's MacBook | VPS, UDP 51820 | existing, untouched |
@@ -57,7 +57,7 @@ flowchart LR
 
 ```text
 apps -> tun (wireguard-go) -> UDP 127.0.0.1:<local port>
-  -> embedded wstunnel client -> wss://vpn.petrixon.com/<prefix> (TLS 443, Apache)
+  -> embedded wstunnel client -> wss://vpn.radarcut.com/<prefix> (TLS 443, Apache)
   -> ws://127.0.0.1:8080 (existing wstunnel server)
   -> UDP 127.0.0.1:51821 -> wg1 -> NAT on eth0 -> internet
 ```
@@ -72,7 +72,7 @@ The VPS public IP is excluded from the tunnel routes, so the wstunnel connection
 sequenceDiagram
   participant App as Flutter app
   participant API as vpn-api
-  participant DB as PostgreSQL
+  participant DB as MySQL
   App->>App: load or create installation_id, read device identifier and device info
   App->>API: POST /api/v1/devices/register
   API->>DB: find device by token, identifier hash, installation_id
@@ -114,7 +114,7 @@ The native engine stops WireGuard and then the wstunnel client. The peer stays p
 
 ### 4.4 Admin
 
-A browser opens `https://vpn.petrixon.com/admin`, which Apache proxies to `vpn-api` (server-rendered HTML). Users and devices come from the database; peer status comes live from `wg1` through `wgctrl`, with counters cached in the database.
+A browser opens `https://vpn.radarcut.com/admin`, which Apache proxies to `vpn-api` (server-rendered HTML). Users and devices come from the database; peer status comes live from `wg1` through `wgctrl`, with counters cached in the database.
 
 ## 5. Security model (summary)
 
@@ -143,7 +143,7 @@ ru_eu_vpn/
 | [0002](decisions/0002-dedicated-wg1-interface.md) | A dedicated `wg1` interface for app clients; `wg0` stays untouched |
 | [0003](decisions/0003-client-generated-wireguard-keys.md) | WireGuard keys are generated on the device |
 | [0004](decisions/0004-device-recognition-and-authentication.md) | Device identifier for recognition, backend token for authentication |
-| [0005](decisions/0005-backend-hosting-and-admin.md) | One Go binary behind the existing Apache, the existing PostgreSQL, a server-rendered admin |
+| [0005](decisions/0005-backend-hosting-and-admin.md) | One Go binary behind the existing Apache, the existing MySQL, a server-rendered admin |
 | [0006](decisions/0006-native-vpn-engine.md) | In-app native VPN engine: wireguard-go libraries plus an embedded wstunnel client |
 
 ## 8. Technical risks
@@ -156,18 +156,19 @@ ru_eu_vpn/
 | R4 | DPI and blocking: `ws://` is easy to detect; the Rust TLS fingerprint differs from browsers; blocking one domain or IP takes down both the API and the tunnel. | High | Use `wss` on 443 with a real certificate and a secret path. Later, separate domains or IPs and an alternative transport. |
 | R5 | Shared VPS: VPN egress, abuse reports and blocklisting affect `radarcut.com`. The Hostinger terms for VPN/proxy use are unverified. | Medium | Block SMTP, isolate `wg1`, and plan a dedicated VPN VPS or IP. |
 | R6 | WireGuard over WebSocket/TCP: TCP-over-TCP slowdowns on lossy mobile networks; MTU issues. | Medium | MTU 1280, WebSocket ping, measure. |
-| R7 | DNS chicken-and-egg: the wstunnel client must reach `vpn.petrixon.com` while the tunnel's DNS is not up yet. | Medium | Resolve the server IP before the tunnel starts, connect by IP with SNI/Host set to the domain, and exclude that IP from routes. |
+| R7 | DNS chicken-and-egg: the wstunnel client must reach `vpn.radarcut.com` while the tunnel's DNS is not up yet. | Medium | Resolve the server IP before the tunnel starts, connect by IP with SNI/Host set to the domain, and exclude that IP from routes. |
 | R8 | `mobile_device_identifier` 0.1.0 is from an unverified publisher; MediaDrm-based IDs behave differently across Android vendors and can be missing. | Medium | Treat the identifier as optional; the installation ID is the fallback. |
 | R9 | Anyone who knows a device identifier can re-register as that device and rotate its token. | Low in v1 (free, no personal data) | Before payments: App Attest / Play Integrity or account login. |
 | R10 | Runtime `wg1` peers are lost when `wg1` restarts. | Low | The database is the source of truth; a reconciler re-applies peers on start and every 60 s. |
 | R11 | Capacity: 2 vCPU; per-connection wstunnel CPU cost and the bandwidth quota are unknown. | Unknown | Load-test in Phase 3. |
 | R12 | Android background limits and OEM battery killers stop the VPN. | Medium | Foreground service, always-on VPN guidance. |
 | R13 | Apache WebSocket proxying of long-lived connections (timeouts). | Low | Proxy timeout settings plus 30 s WebSocket pings; test. |
+| R14 | The VPN lives on a subdomain of the production site. A host name starting with `vpn.` is visible in TLS SNI and is an easy blocking target. A block of `vpn.radarcut.com` could escalate to all of `radarcut.com`, and the reverse is also true. | Medium | The tunnel URL is a backend config value delivered by the API (`transport.url`), so it can move to a neutral host name without an app release. Admin and API can stay on `vpn.radarcut.com`. |
 
 ## 9. Unknowns that need your input
 
-1. Who can create the `vpn.petrixon.com` record at Websupport (and when)?
-2. Is it acceptable for VPN egress to share the IP with `radarcut.com` in v1?
+1. ~~DNS record `vpn.radarcut.com`~~: done on 2026-11-16 (change C1).
+2. Is it acceptable for the VPN to share the IP and the `radarcut.com` domain with the website in v1 (R5, R14)?
 3. Target users and countries (the project name suggests Russia to the EU), which drives the anti-blocking needs and store availability.
 4. Apple Developer account type (organization?) for team `RL5SKRM28G`, and Google Play account status.
 5. VPS datacenter location (shown in the app as server info) and the monthly bandwidth quota.

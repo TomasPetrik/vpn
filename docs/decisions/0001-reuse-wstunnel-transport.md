@@ -9,7 +9,7 @@ Plain WireGuard over UDP is blocked or fingerprinted on the networks this app ta
 ## Decision
 
 - Mobile clients run WireGuard through an embedded wstunnel client against the **same wstunnel server process**.
-- Clients reach it as `wss://vpn.petrixon.com/<secret-prefix>` on port 443. Apache terminates TLS with a Let's Encrypt certificate and proxies the WebSocket upgrade to `127.0.0.1:8080`. The wstunnel server itself is not changed for this.
+- Clients reach it as `wss://vpn.radarcut.com/<secret-prefix>` on port 443. Apache terminates TLS with a Let's Encrypt certificate and proxies the WebSocket upgrade to `127.0.0.1:8080`. The wstunnel server itself is not changed for this.
 - The existing `ws://...:8080` endpoint stays for the MacBook until it migrates (change C7).
 - Before any app traffic, wstunnel gets a restriction file that allows only UDP to `127.0.0.1:51820` and `127.0.0.1:51821` (change C6).
 - Client and server stay pinned to wstunnel 10.5.2 and are upgraded together.

@@ -6,7 +6,7 @@ Audit date: 2026-11-16. The audit was **read-only**: no service was restarted, n
 
 | Item | Value |
 | --- | --- |
-| Provider | Hostinger VPS (KVM), hostname `srv1261775` |
+| Provider | Hostinger VPS (KVM), hostname `srv1261775`. The IP belongs to Hostinger's network `HOSTINGER-HOSTING` (RDAP). |
 | Public IPv4 | `72.61.158.103` (gateway `72.61.158.254`) |
 | Public IPv6 | `2a02:4780:41:792a::1/48` |
 | OS | Ubuntu 24.04.3 LTS, kernel 6.8.0-147 |
@@ -80,16 +80,28 @@ MacBook WireGuard -> 127.0.0.1:51820 (local wstunnel client)
 
 - **Apache 2.4** serves `radarcut.com` and `www.radarcut.com` on 80/443 with a Let's Encrypt certificate (certbot, expires 2027-02-10). Enabled modules include `proxy`, `proxy_http`, `ssl`, `rewrite` and `headers`. `proxy_wstunnel` and `http2` are available but not enabled.
 - **radarcut.service**: Next.js 16 app (`npm run start -- -p 3000`, user `radarcut`).
-- **PostgreSQL 16.15**, listening on localhost only. Databases: `radarcut`, `symfony_demo`.
-- **MySQL** and **PHP 8.3-FPM** (localhost).
+- **MySQL 8.0.46** (Ubuntu package), used by this project. It is bound to `127.0.0.1` (classic protocol 3306 and X protocol 33060), with InnoDB, `utf8mb4` / `utf8mb4_0900_ai_ci`, strict SQL mode, system time zone UTC, a 128 MB buffer pool and `max_connections` 151. The only application database is `symfony_demo` (user `symfony_user@localhost`).
+- **PostgreSQL 16.15**, listening on localhost only. Databases: `radarcut`, `symfony_demo`. Not used by this project.
+- **PHP 8.3-FPM** (localhost).
 - **Docker** engine with no running containers.
 - Disabled units: `tg-bot`, `tg-telethon`, `tg-telethon-web`.
 
 ## 7. DNS
 
-- `petrixon.com` uses Websupport.sk nameservers (`ns1-3.websupport.sk`).
-- `vpn.petrixon.com` has no record of its own. It matches a wildcard pointing to Websupport hosting (`37.9.175.132`, `2a00:4b40:aaaa:2001::5`), **not** to the VPS.
-- Required: an explicit `A vpn.petrixon.com -> 72.61.158.103` record. Once the name has its own record, the wildcard AAAA no longer applies to it. Add an AAAA record only after IPv6 is handled end to end.
+The project uses **`vpn.radarcut.com`** for the admin panel, the API and the tunnel endpoint. `radarcut.com` is fully on Hostinger:
+
+| Item | Finding |
+| --- | --- |
+| Hostinger account | `radarcut.com` is in the Hostinger domain portfolio (active, expires 2027-09-13) |
+| Nameservers | `aurora.dns-parking.com`, `nebula.dns-parking.com` (Hostinger DNS) |
+| Zone today | `@ A 72.61.158.103` (TTL 300), `www CNAME radarcut.com`, `@ TXT` TikTok site verification. No MX, no CAA, no wildcard. |
+| `vpn.radarcut.com` | `A 72.61.158.103` (TTL 300), created 2026-11-16 (change C1) |
+| TLS | The certbot lineage `radarcut.com` covers only `radarcut.com` and `www.radarcut.com` (expires 2027-02-10) |
+| Apache | The `radarcut.com` vhosts are the only vhosts, so today they answer for any unknown host name, including `vpn.radarcut.com` once it resolves |
+
+The `vpn` record was added through the Hostinger API with `overwrite=false`, after a validation call. The existing records are unchanged, and both Hostinger nameservers and public resolvers (1.1.1.1, 8.8.8.8) return the new address. Add no AAAA record until IPv6 is handled end to end.
+
+`petrixon.com` (DNS, email and website at Websupport, registrar Gransy s.r.o.) is no longer needed by this project and stays untouched.
 
 ## 8. Findings in the current setup (not changed)
 
@@ -104,21 +116,21 @@ MacBook WireGuard -> 127.0.0.1:51820 (local wstunnel client)
 
 ## 9. Reuse plan
 
-**Reused as is:** WireGuard kernel module and tools, the wstunnel server process (and binary version), IPv4 forwarding, the NAT/forward rule pattern, UFW, Apache with certbot, and PostgreSQL 16.
+**Reused as is:** WireGuard kernel module and tools, the wstunnel server process (and binary version), IPv4 forwarding, the NAT/forward rule pattern, UFW, Apache with certbot, and MySQL 8.0.
 
-**Never touched:** `wg0`, its peer, its keys and `wg0.conf`; `radarcut` (Apache vhost, app and database); MySQL; the other databases.
+**Never touched:** `wg0`, its peer, its keys and `wg0.conf`; `radarcut` (Apache vhost, app and database); MySQL's server configuration and the `symfony_demo` database; PostgreSQL.
 
 **Proposed additive changes.** Each one needs your explicit approval before it is applied, is applied separately, and is verified before the next:
 
 | # | Change | Effect on the working VPN | Rollback |
 | --- | --- | --- | --- |
-| C1 | DNS at Websupport: `A vpn.petrixon.com 72.61.158.103` | none | delete the record |
-| C2 | PostgreSQL: role `vpn_app`, database `vpn` | none | `DROP DATABASE vpn; DROP ROLE vpn_app;` |
+| C1 | **Done 2026-11-16.** Hostinger DNS zone `radarcut.com`: added `vpn A 72.61.158.103` (TTL 300) via `dns_records_update` with `overwrite=false`. Existing records are not changed. | none | delete the `vpn` A record |
+| C2 | MySQL: `CREATE DATABASE vpn` (utf8mb4) and account `'vpn_app'@'localhost'` with privileges on `vpn.*` only. No server configuration change and no restart. | none | `DROP DATABASE vpn; DROP USER 'vpn_app'@'localhost';` |
 | C3 | New interface `wg1`: new key pair, `10.201.0.1/16`, `ListenPort 51821` (no UFW rule, so reachable only via wstunnel on localhost). `PostUp`/`PostDown` add and remove its own NAT, forward, isolation and SMTP-block rules. | none, `wg0` untouched | `systemctl disable --now wg-quick@wg1`, remove `wg1.conf` |
 | C4 | `vpn-api` systemd service: user `vpnapi`, `127.0.0.1:8090`, `CAP_NET_ADMIN` only | none | `systemctl disable --now vpn-api` |
-| C5 | Apache vhost `vpn.petrixon.com` with a certbot certificate. `/api` and `/admin` proxy to `127.0.0.1:8090`; `/<secret-prefix>/` proxies WebSocket upgrades to `127.0.0.1:8080`. Run `apache2ctl configtest` before a graceful reload. | none, `radarcut` vhost untouched | `a2dissite`, graceful reload |
+| C5 | Apache vhost `vpn.radarcut.com`, in new files `vpn.radarcut.com.conf` and `-le-ssl.conf`, with its **own** certbot certificate (`certbot certonly -d vpn.radarcut.com`; the existing `radarcut.com` certificate is not expanded or changed). `/api` and `/admin` proxy to `127.0.0.1:8090`; `/<secret-prefix>/` proxies WebSocket upgrades to `127.0.0.1:8080`. Run `apache2ctl configtest` before a graceful reload. | none; the `radarcut.com` vhosts and certificate are untouched | `a2dissite`, graceful reload, `certbot delete --cert-name vpn.radarcut.com` |
 | C6 | **wstunnel hardening (fixes F1).** Add `--restrict-config /etc/wstunnel/restrictions.yaml` to the unit, allowing only UDP to `127.0.0.1` ports 51820 and 51821. Requires **one wstunnel restart** (about 5 s MacBook reconnect); no MacBook client change. | brief reconnect | restore the unit backup, `daemon-reload`, restart |
-| C7 | Later: bind wstunnel to `127.0.0.1:8080`, require the secret path prefix, and close 8080 in UFW. Needs the MacBook client to move to `wss://vpn.petrixon.com/<prefix>`. | MacBook client command change | revert the unit, reopen 8080 |
+| C7 | Later: bind wstunnel to `127.0.0.1:8080`, require the secret path prefix, and close 8080 in UFW. Needs the MacBook client to move to `wss://vpn.radarcut.com/<prefix>`. | MacBook client command change | revert the unit, reopen 8080 |
 
 Sketch for C6 (to be verified on the server before applying):
 
@@ -163,7 +175,16 @@ sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding
 ufw status verbose; iptables -S; iptables -t nat -S; ip6tables -t nat -S; nft list tables
 apache2ctl -S; apache2ctl -M; ls /etc/letsencrypt/live
 sudo -u postgres psql -c 'select version()'   # plus database and role names only
+mysqld --version
+mysql -NBe "SELECT schema_name FROM information_schema.schemata; SELECT CONCAT(user,'@',host) FROM mysql.user;"
+mysql -NBe "SELECT @@version, @@bind_address, @@character_set_server, @@sql_mode, @@time_zone, @@max_connections;"
 docker ps; systemctl show radarcut.service
 ```
 
-Locally: `dig vpn.petrixon.com`, `dig NS petrixon.com`, and the redacted `~/workspace/wireguard/wg0.conf`.
+Locally:
+
+- `dig` for the NS, SOA, MX, TXT, CAA, `www` and `vpn` records of `radarcut.com` and `petrixon.com`
+- RDAP lookups for `petrixon.com`, `37.9.175.132` and `72.61.158.103`
+- the Hostinger domain portfolio and the `radarcut.com` zone, through the read-only API
+- on the VPS: `grep` of `ServerName`, `ServerAlias` and `ProxyPass` in `sites-enabled`, and `certbot certificates`
+- the redacted `~/workspace/wireguard/wg0.conf`

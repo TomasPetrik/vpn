@@ -1,6 +1,6 @@
 # API proposal
 
-Status: **Proposed.** The base URL is `https://vpn.petrixon.com/api/v1`. All bodies are JSON (`snake_case`).
+Status: **Proposed.** The base URL is `https://vpn.radarcut.com/api/v1`. All bodies are JSON (`snake_case`).
 
 ## Conventions
 
@@ -82,7 +82,7 @@ Response `200`:
   },
   "transport": {
     "type": "wstunnel",
-    "url": "wss://vpn.petrixon.com",
+    "url": "wss://vpn.radarcut.com",
     "path_prefix": "<prefix>",
     "remote": "127.0.0.1:51821",
     "server_ips": ["72.61.158.103"]
@@ -94,7 +94,7 @@ Rules:
 
 - The same key returns the same peer and IP. A new key replaces the old key and keeps the IP.
 - The client sets its WireGuard endpoint to the local wstunnel listener (`127.0.0.1:<port>`).
-- `server_ips` lets the client connect without DNS while the tunnel is starting, using SNI and Host `vpn.petrixon.com`.
+- `server_ips` lets the client connect without DNS while the tunnel is starting, using SNI and Host `vpn.radarcut.com`.
 
 ### `GET /servers`
 
