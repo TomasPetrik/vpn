@@ -1,6 +1,6 @@
 # 0006: Native VPN engine with an embedded wstunnel client
 
-Status: Proposed (pending the Phase 2 spikes)
+Status: Accepted as direction (2026-11-16); the wstunnel embedding method is finalized after the Phase 2 spikes
 
 ## Context
 

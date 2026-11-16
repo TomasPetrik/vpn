@@ -24,6 +24,7 @@ erDiagram
   devices ||--o| wireguard_peers : has
   vpn_servers ||--o{ wireguard_peers : hosts
   admins ||--o{ admin_sessions : has
+  admins ||--o{ app_update_policies : "last updated"
 ```
 
 ## 3. Schema (migration `0001_init.sql`)
@@ -49,6 +50,7 @@ CREATE TABLE devices (
   model            VARCHAR(100) NULL,
   os_version       VARCHAR(50) NULL,
   app_version      VARCHAR(50) NULL,
+  app_build        INT UNSIGNED NULL,                        -- last reported build, used by force upgrade
   status           VARCHAR(16) NOT NULL DEFAULT 'active',
   last_seen_at     DATETIME(6) NULL,
   created_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -123,6 +125,22 @@ CREATE TABLE admin_sessions (
   KEY admin_sessions_admin_idx (admin_id),
   CONSTRAINT admin_sessions_admin_fk FOREIGN KEY (admin_id) REFERENCES admins (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE app_update_policies (
+  platform             VARCHAR(16) NOT NULL,
+  min_supported_build  INT UNSIGNED NOT NULL DEFAULT 0,       -- below this build: force upgrade
+  latest_build         INT UNSIGNED NOT NULL DEFAULT 0,       -- below this build: soft prompt
+  update_url           VARCHAR(500) NULL,
+  message              VARCHAR(500) NULL,
+  updated_by           CHAR(36) CHARACTER SET ascii NULL,
+  updated_at           DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (platform),
+  CONSTRAINT app_update_policies_platform_chk CHECK (platform IN ('android', 'ios')),
+  CONSTRAINT app_update_policies_builds_chk CHECK (latest_build >= min_supported_build),
+  CONSTRAINT app_update_policies_admin_fk FOREIGN KEY (updated_by) REFERENCES admins (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO app_update_policies (platform) VALUES ('android'), ('ios');  -- 0 = nothing forced
 ```
 
 ## 4. Rules and notes
@@ -132,7 +150,8 @@ CREATE TABLE admin_sessions (
 - **One user per device in v1.** Linking several devices to one user comes later, with accounts.
 - **One peer row per device and server.** MySQL has no partial indexes, so `wireguard_peers` holds only the current peer. Revoking a peer deletes the row, which frees its IP. No peer history is kept in v1.
 - **IP allocation:** the first free `tunnel_ipv4` in the server's CIDR, skipping the network address, `.1` and the broadcast address. `wireguard_peers_ip_uq` guards against races, and a duplicate-key error retries the allocation.
-- **The server row** is seeded and updated from config at startup (single server in v1).
+- **The server row** is seeded and updated from config at startup (single server in v1: Germany, `DE`).
+- **Force upgrade:** one `app_update_policies` row per platform, edited only in the admin panel. `devices.app_build` is updated from the `X-App-Build` header, so the panel can show how many devices a new minimum would block ([ADR-0007](decisions/0007-force-upgrade.md)).
 - **Migrations:** MySQL DDL is not transactional, so a failed migration can leave partial changes. Migrations stay small and are tested on the local Docker MySQL first.
 - **Not stored:** traffic, DNS or connection logs, raw device identifiers, WireGuard private keys, plaintext tokens or passwords.
 - **Server status** (load, uptime, interface state) is read live and not stored.

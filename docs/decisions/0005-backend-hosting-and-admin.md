@@ -1,6 +1,6 @@
 # 0005: Backend hosting and admin panel
 
-Status: Proposed
+Status: Accepted (2026-11-16)
 
 ## Context
 
@@ -10,7 +10,7 @@ The Hostinger VPS already runs Apache (which owns 80/443 and serves `radarcut.co
 
 - **One Go binary `vpn-api`** serves the REST API, the admin panel and the background loops (reconciler and stats poller).
   - It runs under systemd as user `vpnapi` with only `CAP_NET_ADMIN`, on `127.0.0.1:8090`.
-- **Apache** gets a new vhost `vpn.radarcut.com` with its own certbot certificate. It proxies `/api/` and `/admin/` to `vpn-api`, and the secret WebSocket path to wstunnel. The `radarcut` vhost is untouched; config changes go through `configtest` and a graceful reload.
+- **Apache** gets a new vhost `vpn.radarcut.com` with its own certbot certificate. It proxies `/api/` and `/admin/` to `vpn-api`, and the secret WebSocket path to `wstunnel-app` on `127.0.0.1:8081`. The `radarcut` vhost is untouched; config changes go through `configtest` and a graceful reload.
 - **MySQL:** a new database `vpn` with a dedicated account `'vpn_app'@'localhost'`, on the existing MySQL 8.0 server, reached over the Unix socket. The server configuration is not changed.
 - **Admin panel:** server-rendered `html/template` pages embedded in the binary, with no JavaScript framework and no separate frontend build.
 - **Deployment:** cross-compile on the Mac and copy the binary to the VPS. No Go toolchain and no Docker are needed on the server.

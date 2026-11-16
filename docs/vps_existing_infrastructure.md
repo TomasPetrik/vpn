@@ -12,7 +12,7 @@ Audit date: 2026-11-16. The audit was **read-only**: no service was restarted, n
 | OS | Ubuntu 24.04.3 LTS, kernel 6.8.0-147 |
 | Resources | 2 vCPU, 7.8 GiB RAM, 96 GB disk (16 GB used) |
 | Access | SSH as `root` with key from the MacBook |
-| Datacenter / bandwidth quota | Unknown (not visible from the shell or the Hostinger API tools available) |
+| Datacenter / bandwidth quota | Germany (per owner); no bandwidth limit for now |
 
 ## 2. WireGuard (`wg0`)
 
@@ -103,11 +103,11 @@ The `vpn` record was added through the Hostinger API with `overwrite=false`, aft
 
 `petrixon.com` (DNS, email and website at Websupport, registrar Gransy s.r.o.) is no longer needed by this project and stays untouched.
 
-## 8. Findings in the current setup (not changed)
+## 8. Findings in the original setup
 
 | # | Severity | Finding |
 | --- | --- | --- |
-| F1 | Critical | **wstunnel is an open relay.** Anyone can open tunnels through `:8080` to any destination. That includes services bound to the VPS's localhost (PostgreSQL 5432, MySQL 3306, Next.js 3000), SOCKS5 and HTTP proxying, and reverse tunnels that bind ports on the server (port 8000 is open in UFW and unused). It runs as root. Abuse would land on this IP and on `radarcut.com`. |
+| F1 | Critical, **fixed 2026-11-16 (C6)** | **wstunnel was an open relay.** Anyone can open tunnels through `:8080` to any destination. That includes services bound to the VPS's localhost (PostgreSQL 5432, MySQL 3306, Next.js 3000), SOCKS5 and HTTP proxying, and reverse tunnels that bind ports on the server (port 8000 is open in UFW and unused). It runs as root. Abuse would land on this IP and on `radarcut.com`. |
 | F2 | High | Plain `ws://`: the upgrade request and tunnel metadata are visible to DPI and easy to fingerprint. |
 | F3 | Medium | VPN egress shares one IP with `radarcut.com`. Blocklisting or abuse reports against the VPN IP affect the website, and the reverse is also true. |
 | F4 | Low | UFW and `netfilter-persistent` both manage iptables. Running `netfilter-persistent save` would capture UFW's chains into `rules.v4`. New rules should be self-contained (see section 9, change C3). |
@@ -116,7 +116,9 @@ The `vpn` record was added through the Hostinger API with `overwrite=false`, aft
 
 ## 9. Reuse plan
 
-**Reused as is:** WireGuard kernel module and tools, the wstunnel server process (and binary version), IPv4 forwarding, the NAT/forward rule pattern, UFW, Apache with certbot, and MySQL 8.0.
+**Reused as is:** WireGuard kernel module and tools, the installed wstunnel 10.5.2 binary (run as a second, separate instance for the app), IPv4 forwarding, the NAT/forward rule pattern, UFW, Apache with certbot, and MySQL 8.0.
+
+**The owner's VPN path stays separate:** the `wstunnel` service on `:8080` and `wg0` serve only the MacBook. App work never restarts them ([ADR-0001](decisions/0001-reuse-wstunnel-transport.md)).
 
 **Never touched:** `wg0`, its peer, its keys and `wg0.conf`; `radarcut` (Apache vhost, app and database); MySQL's server configuration and the `symfony_demo` database; PostgreSQL.
 
@@ -126,23 +128,47 @@ The `vpn` record was added through the Hostinger API with `overwrite=false`, aft
 | --- | --- | --- | --- |
 | C1 | **Done 2026-11-16.** Hostinger DNS zone `radarcut.com`: added `vpn A 72.61.158.103` (TTL 300) via `dns_records_update` with `overwrite=false`. Existing records are not changed. | none | delete the `vpn` A record |
 | C2 | MySQL: `CREATE DATABASE vpn` (utf8mb4) and account `'vpn_app'@'localhost'` with privileges on `vpn.*` only. No server configuration change and no restart. | none | `DROP DATABASE vpn; DROP USER 'vpn_app'@'localhost';` |
-| C3 | New interface `wg1`: new key pair, `10.201.0.1/16`, `ListenPort 51821` (no UFW rule, so reachable only via wstunnel on localhost). `PostUp`/`PostDown` add and remove its own NAT, forward, isolation and SMTP-block rules. | none, `wg0` untouched | `systemctl disable --now wg-quick@wg1`, remove `wg1.conf` |
+| C3 | New interface `wg1`: new key pair, `10.201.0.1/16`, `ListenPort 51821` (no UFW rule, so reachable only via `wstunnel-app` on localhost). `PostUp`/`PostDown` add and remove its own NAT, forward, isolation and SMTP-block rules. | none, `wg0` untouched | `systemctl disable --now wg-quick@wg1`, remove `wg1.conf` |
 | C4 | `vpn-api` systemd service: user `vpnapi`, `127.0.0.1:8090`, `CAP_NET_ADMIN` only | none | `systemctl disable --now vpn-api` |
-| C5 | Apache vhost `vpn.radarcut.com`, in new files `vpn.radarcut.com.conf` and `-le-ssl.conf`, with its **own** certbot certificate (`certbot certonly -d vpn.radarcut.com`; the existing `radarcut.com` certificate is not expanded or changed). `/api` and `/admin` proxy to `127.0.0.1:8090`; `/<secret-prefix>/` proxies WebSocket upgrades to `127.0.0.1:8080`. Run `apache2ctl configtest` before a graceful reload. | none; the `radarcut.com` vhosts and certificate are untouched | `a2dissite`, graceful reload, `certbot delete --cert-name vpn.radarcut.com` |
-| C6 | **wstunnel hardening (fixes F1).** Add `--restrict-config /etc/wstunnel/restrictions.yaml` to the unit, allowing only UDP to `127.0.0.1` ports 51820 and 51821. Requires **one wstunnel restart** (about 5 s MacBook reconnect); no MacBook client change. | brief reconnect | restore the unit backup, `daemon-reload`, restart |
-| C7 | Later: bind wstunnel to `127.0.0.1:8080`, require the secret path prefix, and close 8080 in UFW. Needs the MacBook client to move to `wss://vpn.radarcut.com/<prefix>`. | MacBook client command change | revert the unit, reopen 8080 |
+| C5 | Apache vhost `vpn.radarcut.com`, in new files `vpn.radarcut.com.conf` and `-le-ssl.conf`, with its **own** certbot certificate (`certbot certonly -d vpn.radarcut.com`; the existing `radarcut.com` certificate is not expanded or changed). `/api` and `/admin` proxy to `127.0.0.1:8090`; `/<secret-prefix>/` proxies WebSocket upgrades to `wstunnel-app` on `127.0.0.1:8081` (C8). Run `apache2ctl configtest` before a graceful reload. | none; the `radarcut.com` vhosts and certificate are untouched | `a2dissite`, graceful reload, `certbot delete --cert-name vpn.radarcut.com` |
+| C6 | **Done 2026-11-16 (fixes F1).** Added `--restrict-config /etc/wstunnel/restrictions.yaml` to the unit, allowing only UDP to `127.0.0.1:51820`. One wstunnel restart; the MacBook was reachable through the tunnel again 3 s later, with no client change. | 3 s reconnect | see "Applied C6" below |
+| C7 | Optional, later, only on your request: move the MacBook to `wss://vpn.radarcut.com/<owner-prefix>` (Apache to the owner's instance bound to `127.0.0.1:8080`), then close 8080 in UFW. | MacBook client command change | revert the unit, reopen 8080 |
+| C8 | New service `wstunnel-app`: the installed wstunnel 10.5.2 binary, user `wstunnel-app` (no root), `ws://127.0.0.1:8081` (not reachable from the internet; no UFW rule). Restriction file `/etc/wstunnel-app/restrictions.yaml` allows only UDP to `127.0.0.1:51821` (`wg1`) and requires the secret path prefix. systemd limits on memory and CPU. | none; separate process, the owner's `wstunnel` service is not touched | `systemctl disable --now wstunnel-app`, remove the unit and `/etc/wstunnel-app` |
 
-Sketch for C6 (to be verified on the server before applying):
+**Phase 2 order:** C2 (MySQL), C3 (`wg1`), C8 (`wstunnel-app`), C4 (`vpn-api`), C5 (Apache vhost and certificate). None of these steps restarts the owner's `wstunnel` or `wg0`.
+
+### Applied C6
+
+`/etc/wstunnel/restrictions.yaml` (reloaded automatically on change, so it can be extended without a restart):
 
 ```yaml
 restrictions:
   - name: "wireguard-only"
-    match: [!PathPrefix "^.*$"]
+    description: "UDP to local WireGuard only"
+    match:
+      - !PathPrefix "^.*$"
     allow:
       - !Tunnel
         protocol: [Udp]
-        port: [51820, 51821]
+        port: [51820]
+        host: "^localhost$"
         cidr: [127.0.0.1/32]
+```
+
+The only unit change: `ExecStart=/root/wstunnel server --restrict-config /etc/wstunnel/restrictions.yaml ws://0.0.0.0:8080`.
+
+How it was applied:
+
+1. A test instance on `127.0.0.1:18080` confirmed the decisions. UDP to `127.0.0.1:51820` was accepted. TCP to 3306 and 3000, UDP to a domain or another port, reverse tunnels and SOCKS5 were all rejected.
+2. The change ran as a transient systemd job with automatic rollback (`/root/wstunnel-c6/apply.sh`). It would have rolled back if the MacBook (`10.200.200.2`) had not answered a ping through the tunnel within 150 s. A 5-minute dead-man timer covered the case of the script itself failing.
+3. Result: the MacBook answered 3 s after the restart. The live log shows `Tunnel accepted due to matched restriction: wireguard-only`, and a test from outside confirmed that MySQL and SOCKS5 access through the relay is rejected.
+
+Files in `/root/wstunnel-c6/` (mode `0700`): `wstunnel.service.orig` (backup), `wstunnel.service.new`, `apply.sh`, `deadman.sh`, `apply.log`.
+
+Manual rollback, which also works without the VPN because SSH to the VPS goes outside the tunnel:
+
+```bash
+ssh root@72.61.158.103 'cp -p /root/wstunnel-c6/wstunnel.service.orig /etc/systemd/system/wstunnel.service && systemctl daemon-reload && systemctl restart wstunnel'
 ```
 
 Sketch for C3 rules (managed by `wg1.conf`, so they leave together with the interface):

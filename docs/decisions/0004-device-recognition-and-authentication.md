@@ -1,6 +1,6 @@
 # 0004: Device recognition vs. authentication
 
-Status: Proposed
+Status: Accepted (2026-11-16)
 
 ## Context
 

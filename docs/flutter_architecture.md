@@ -2,6 +2,19 @@
 
 Status: **Proposed.** The project is currently the default Flutter template (`cz.scalesoft.ru_eu_vpn` on Android, `cz.scalesoft.ruEuVpn` on iOS, Dart SDK `^3.10.4`, iOS deployment target 13.0).
 
+## 0. App identity (decided 2026-11-16, applied in Phase 2)
+
+| Item | Value |
+| --- | --- |
+| Display name | **PetrikVPN** |
+| Android `applicationId` and `namespace` | `com.petrixon.vpn` (Kotlin sources move to `com/petrixon/vpn/`) |
+| iOS bundle ID | `com.petrixon.vpn` |
+| iOS Packet Tunnel extension | `com.petrixon.vpn.PacketTunnel` (must be prefixed by the app's bundle ID) |
+| iOS App Group / Keychain group | `group.com.petrixon.vpn` |
+| Dart package name | stays `ru_eu_vpn` (internal only, never shown to users) |
+
+The IDs must be final before the first build reaches anyone. After that, a change means a new app for the stores and for the force-upgrade policy.
+
 ## 1. Principles
 
 - **Feature-first.** Code is grouped by feature. Each feature has `data/`, `domain/` and `presentation/`.
@@ -25,7 +38,8 @@ Status: **Proposed.** The project is currently the default Flutter template (`cz
 | `get_it`, `injectable` | Dependency injection |
 | `device_info_plus`, `mobile_device_identifier` | Device recognition signals |
 | `flutter_secure_storage` (addition) | Device token and installation ID; Drift is not encrypted |
-| `package_info_plus` (addition) | App version sent at registration |
+| `package_info_plus` (addition) | App version and build number (registration, force upgrade) |
+| `url_launcher` (addition) | Opens the update link from the force-upgrade page |
 | `uuid` (addition) | Installation ID |
 | Dev: `build_runner`, `freezed`, `json_serializable`, `retrofit_generator`, `injectable_generator`, `drift_dev`, `bloc_test`, `mocktail` | Code generation and tests |
 
@@ -48,12 +62,24 @@ lib/
 │   ├── network/
 │   │   ├── dio_factory.dart
 │   │   ├── auth_interceptor.dart    # Bearer device token, one re-register on 401
+│   │   ├── app_version_interceptor.dart  # X-App-Platform/Build/Version headers; 426 -> force upgrade
 │   │   └── api_failure.dart         # sealed Failure: network, server, unauthorized, unknown
 │   ├── database/
 │   │   └── app_database.dart        # Drift DB and tables
 │   └── storage/
 │       └── secure_store.dart        # device token, installation id
 └── features/
+    ├── app_update/                  # force and soft upgrade (ADR-0007)
+    │   ├── data/
+    │   │   ├── app_config_api.dart          # Retrofit: GET /app/config
+    │   │   └── app_update_repository_impl.dart  # caches the last policy in Drift
+    │   ├── domain/
+    │   │   ├── update_policy.dart           # Freezed: none | recommended | required
+    │   │   └── app_update_repository.dart
+    │   └── presentation/
+    │       ├── app_update_cubit.dart        # checks on start and on resume
+    │       ├── update_required_page.dart    # full-screen block with the update button
+    │       └── update_available_banner.dart
     ├── device/                      # first launch and automatic registration
     │   ├── data/
     │   │   ├── device_api.dart              # Retrofit: POST /devices/register, GET /me
@@ -91,13 +117,15 @@ Generated files (`*.g.dart`, `*.freezed.dart`, `injection.config.dart`) are prod
 
 ## 4. Navigation
 
-- `/`: `SplashPage` waits for `BootstrapCubit`, then redirects to `/home`.
+- `/`: `SplashPage` waits for `AppUpdateCubit` and `BootstrapCubit`, then redirects to `/home`.
 - `/home`: `HomePage` with the connect button, status and server info.
+- `/update-required`: `UpdateRequiredPage`. The GoRouter `redirect` sends **every** route here while the update status is `required`; it listens to `AppUpdateCubit`, so a `426` from any API call switches the screen immediately.
 
-These are the only two routes in v1.
+These are the only three routes in v1.
 
 ## 5. State
 
+- **`AppUpdateCubit`** (app_update feature) checks `GET /app/config` on start and on every `AppLifecycleState.resumed`. Without network it uses the cached policy. Its states are `unknown`, `upToDate`, `updateAvailable(policy)` and `updateRequired(policy)`. On `updateRequired` it asks `VpnBloc` to disconnect.
 - **`BootstrapCubit`** (device feature) moves through `initial`, `registering`, then `registered` or `offline`. A failure does not block the home screen; registration is retried on connect.
 - **`VpnBloc`** (vpn feature) handles the events `ConnectPressed`, `DisconnectPressed` and `EngineStatusChanged`. Its state is a `VpnStatus` union: `disconnected`, `preparing`, `permissionDenied`, `connecting`, `connected(since, tunnelIp, rx, tx)`, `disconnecting` and `failed(reason)`.
 - **`ServerInfoCubit`** (servers feature) shows the cached server first, then refreshes it from `GET /servers`.
@@ -109,6 +137,7 @@ These are the only two routes in v1.
 | Device token, installation ID | `flutter_secure_storage` (Keychain, Android Keystore) |
 | WireGuard private key | Native secure storage only; never passed to Dart |
 | `user_id`, `device_id`, server list, last VPN config (public parts) | Drift tables `registration`, `servers`, `vpn_profile` |
+| Last update policy (force upgrade) | Drift table `update_policy` |
 
 ## 7. Device identity collection
 
@@ -149,7 +178,8 @@ The status events are `disconnected`, `connecting`, `connected`, `disconnecting`
 
 ### iOS
 
-- Requires the paid Apple Developer team (`RL5SKRM28G` is already set), the Network Extension capability (Packet Tunnel), an App Group and a shared Keychain access group.
+- Requires a **paid** Apple Developer Program membership (free personal teams cannot use Network Extensions), the Network Extension capability (Packet Tunnel), an App Group and a shared Keychain access group.
+- Team `RL5SKRM28G` is a paid individual membership (confirmed 2026-11-16); the organization enrollment is in progress. An individual paid membership is enough for development on the owner's devices and for Ad Hoc builds for family and friends. App Store release waits for the organization account.
 - New Xcode target `PacketTunnel` (`NEPacketTunnelProvider`) using WireGuardKit from wireguard-apple. Its wireguard-go bridge needs the Go toolchain during the Xcode build.
 - The wstunnel client is compiled from Rust as an XCFramework and started inside the extension before WireGuard, which uses endpoint `127.0.0.1:<port>`.
 - The extension's memory limit (about 50 MB) is measured in the spike. The minimum iOS version is likely raised to 15.

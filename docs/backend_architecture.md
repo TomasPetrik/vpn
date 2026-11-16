@@ -8,7 +8,8 @@ Status: **Proposed.**
 - Device-token authentication.
 - WireGuard peer provisioning on `wg1` and VPN config delivery.
 - Basic server information for the app.
-- Minimal admin panel: login, users, devices, peer status, server status.
+- Force upgrade: an update policy per platform, enforced on every API request ([ADR-0007](decisions/0007-force-upgrade.md)).
+- Minimal admin panel: login, users, devices, peer status, server status, app update policy.
 
 ## 2. Process model
 
@@ -51,6 +52,7 @@ backend/
 │   │   ├── service.go
 │   │   └── ipalloc.go
 │   ├── wg/                       # wgctrl adapter (interface + fake for macOS dev), reconciler, stats
+│   ├── appupdate/                # GET /app/config, min-build middleware (426), admin policy form
 │   ├── serverinfo/               # server info and status: load, uptime, wg, wstunnel reachability
 │   ├── admin/                    # login, sessions, CSRF, pages
 │   │   ├── templates/*.html
@@ -63,7 +65,8 @@ backend/
     ├── vpn-api.service
     ├── apache-vpn.radarcut.com.conf
     ├── wg1.conf.example          # no keys
-    ├── wstunnel-restrictions.yaml
+    ├── wstunnel-app.service      # separate wstunnel instance for the app (127.0.0.1:8081)
+    ├── wstunnel-app-restrictions.yaml
     └── env.example               # names only, no values
 ```
 
@@ -78,6 +81,13 @@ Layering is handler, then service, then sqlc queries. The only interface is the 
 3. If a device is found: update its info and missing signals. If the request had no valid token, rotate the token.
 4. If no device is found: insert the user and the device. The transaction runs at `READ COMMITTED`. If a concurrent request inserted first, the unique indexes raise a duplicate-key error (1062); that error, or a deadlock (1213), triggers one retry of the lookup, so both requests return the same row.
 5. Return the IDs and, when issued, the new token.
+
+### Force upgrade (every API request)
+
+1. A middleware reads `X-App-Platform` and `X-App-Build`. The policy (two rows) is cached in memory and refreshed when the admin saves it.
+2. If the build is below `min_supported_build`, the request ends with `426 app_update_required` and the `update` object. `/app/config` and `/healthz` are exempt.
+3. For authenticated requests, `devices.app_build` and `app_version` are updated when they change.
+4. A request without version headers is treated as build 0. Once a minimum is set, a client that sends no headers is blocked as well.
 
 ### Peer provisioning (`PUT /api/v1/devices/me/peer`)
 
@@ -106,7 +116,7 @@ WSTUNNEL_PATH_PREFIX
 SERVER_PUBLIC_IPS=72.61.158.103
 VPN_DNS=1.1.1.1,1.0.0.1
 VPN_MTU=1280
-SERVER_NAME, SERVER_COUNTRY_CODE, SERVER_CITY
+SERVER_NAME=Germany, SERVER_COUNTRY_CODE=DE, SERVER_CITY
 ```
 
 The MySQL connection uses the Unix socket `/var/run/mysqld/mysqld.sock` with the account `'vpn_app'@'localhost'`, which has privileges only on `vpn.*`. The DSN sets `parseTime=true`, `loc=UTC` and `time_zone='+00:00'`. The socket avoids the `localhost` vs `127.0.0.1` vs `::1` account-host mismatch. The connection pool is capped at 10 (the server allows 151 connections in total).
@@ -125,14 +135,15 @@ The MySQL connection uses the Unix socket `/var/run/mysqld/mysqld.sock` with the
 
 ## 8. Admin panel (v1)
 
-All pages are server-rendered, read-only HTML with plain CSS and no JavaScript framework.
+All pages are server-rendered HTML with plain CSS and no JavaScript framework. Everything is read-only except the app update policy form.
 
 | Page | Content |
 | --- | --- |
 | `/admin/login` | Username and password |
-| `/admin` | Server status: uptime, load, `wg1` up and peer count, peers with a handshake in the last 3 minutes, wstunnel port reachable, database OK, read-only `wg0` peer count |
+| `/admin` | Server status: uptime, load, `wg1` up and peer count, peers with a handshake in the last 3 minutes, `wstunnel-app` reachable, database OK, read-only `wg0` peer count |
 | `/admin/users` | Users with device count and created date (paginated) |
-| `/admin/devices` | Platform, model, OS, app version, last seen |
+| `/admin/devices` | Platform, model, OS, app version and build, last seen |
+| `/admin/app-versions` | Per platform: minimum supported build (force upgrade), latest build (soft prompt), update URL, message. Saving asks for confirmation and shows how many devices would be blocked. |
 | `/admin/peers` | Device, tunnel IP, last handshake, rx/tx, online/offline |
 
 ## 9. Build, deploy, local development

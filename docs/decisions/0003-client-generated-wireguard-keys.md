@@ -1,6 +1,6 @@
 # 0003: WireGuard keys are generated on the device
 
-Status: Proposed
+Status: Accepted (2026-11-16)
 
 ## Context
 

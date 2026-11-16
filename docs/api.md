@@ -5,7 +5,9 @@ Status: **Proposed.** The base URL is `https://vpn.radarcut.com/api/v1`. All bod
 ## Conventions
 
 - **Auth:** `Authorization: Bearer <device_token>` on every endpoint marked with an asterisk (*).
-- **Errors:** `{"error": {"code": "invalid_request", "message": "..."}}`. Codes: `invalid_request` (400), `invalid_token` (401), `device_blocked` (403), `not_found` (404), `rate_limited` (429), `wg_unavailable` (503), `internal` (500).
+- **App version headers on every request:** `X-App-Platform: android|ios`, `X-App-Build: 12` (integer build number), `X-App-Version: 1.2.0`.
+- **Errors:** `{"error": {"code": "invalid_request", "message": "..."}}`. Codes: `invalid_request` (400), `invalid_token` (401), `device_blocked` (403), `not_found` (404), `app_update_required` (426), `rate_limited` (429), `wg_unavailable` (503), `internal` (500).
+- **Force upgrade:** any request from a build below the platform's minimum gets `426 app_update_required`, except `/app/config` and `/healthz`. The error body also contains the `update` object from `/app/config` ([ADR-0007](decisions/0007-force-upgrade.md)).
 - **Idempotency:** registration and peer provisioning can be retried safely; they never create duplicates.
 
 ## Endpoints
@@ -13,11 +15,34 @@ Status: **Proposed.** The base URL is `https://vpn.radarcut.com/api/v1`. All bod
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | GET | `/healthz` (outside `/api/v1`) | none | Liveness for monitoring |
+| GET | `/app/config` | none | Update policy (force or soft upgrade) for this platform and build |
 | POST | `/devices/register` | optional | Recognize or create the device and user, issue a token |
 | GET | `/me` | * | Current user and device |
 | PUT | `/devices/me/peer` | * | Provision or update the WireGuard peer, return the VPN config |
 | GET | `/devices/me/peer` | * | Current VPN config (404 if none) |
 | GET | `/servers` | * | Basic server information |
+
+### `GET /app/config?platform=android&build=12`
+
+Called on every app start and every return to the foreground. No authentication.
+
+```json
+{
+  "update": {
+    "status": "required",
+    "min_supported_build": 14,
+    "latest_build": 15,
+    "update_url": "https://play.google.com/apps/testing/com.petrixon.vpn",
+    "message": "Please update PetrikVPN to keep using the VPN."
+  }
+}
+```
+
+`status` is one of:
+
+- `none`: the build is at least `latest_build`.
+- `recommended`: the build is at least `min_supported_build` but below `latest_build`; the app shows a dismissible prompt.
+- `required`: the build is below `min_supported_build`; the app disconnects the VPN and shows only the blocking update page.
 
 ### `POST /devices/register`
 
@@ -68,7 +93,7 @@ Response `200`:
 ```json
 {
   "peer_id": "0193f1e2-...",
-  "server": { "id": "0193f1e2-...", "name": "EU-1", "country_code": "??" },
+  "server": { "id": "0193f1e2-...", "name": "Germany", "country_code": "DE" },
   "interface": {
     "addresses": ["10.201.0.17/32"],
     "dns": ["1.1.1.1", "1.0.0.1"],
@@ -101,7 +126,7 @@ Rules:
 ```json
 {
   "servers": [
-    { "id": "0193f1e2-...", "name": "EU-1", "country_code": "??", "city": null, "status": "online" }
+    { "id": "0193f1e2-...", "name": "Germany", "country_code": "DE", "city": null, "status": "online" }
   ]
 }
 ```
@@ -116,6 +141,7 @@ Rules:
 | GET | `/admin/users` | Users list |
 | GET | `/admin/devices` | Devices list |
 | GET | `/admin/peers` | WireGuard peer status |
+| GET, POST | `/admin/app-versions` | View and set the update policy per platform (minimum build, latest build, update URL, message), with a confirmation that shows how many devices would be blocked |
 
 ## Later (not in v1)
 
