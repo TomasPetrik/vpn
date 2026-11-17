@@ -7,10 +7,11 @@ Status: **Proposed.** The project is currently the default Flutter template (`cz
 | Item | Value |
 | --- | --- |
 | Display name | **PetrikVPN** |
-| Android `applicationId` and `namespace` | `com.petrixon.vpn` (Kotlin sources move to `com/petrixon/vpn/`) |
-| iOS bundle ID | `com.petrixon.vpn` |
-| iOS Packet Tunnel extension | `com.petrixon.vpn.PacketTunnel` (must be prefixed by the app's bundle ID) |
-| iOS App Group / Keychain group | `group.com.petrixon.vpn` |
+| Android `applicationId` and `namespace` | `cz.tomaspetrik.petrikvpn` (Kotlin sources under `cz.tomaspetrik.petrikvpn/`) |
+| iOS bundle ID | `cz.tomaspetrik.petrikvpn` |
+| iOS Packet Tunnel extension | `cz.tomaspetrik.petrikvpn.PacketTunnel` (must be prefixed by the app's bundle ID) |
+| iOS App Group / Keychain group | `group.cz.tomaspetrik.petrikvpn` |
+| Apple team | `56S59F5D36` (Tomas Petrik) — replaces previous company team that owned `com.petrixon.vpn` |
 | Dart package name | stays `ru_eu_vpn` (internal only, never shown to users) |
 
 The IDs must be final before the first build reaches anyone. After that, a change means a new app for the stores and for the force-upgrade policy.
@@ -179,7 +180,7 @@ The status events are `disconnected`, `connecting`, `connected`, `disconnecting`
 ### iOS
 
 - Requires a **paid** Apple Developer Program membership (free personal teams cannot use Network Extensions), the Network Extension capability (Packet Tunnel), an App Group and a shared Keychain access group.
-- Team `RL5SKRM28G` is a paid individual membership (confirmed 2026-11-16); the organization enrollment is in progress. An individual paid membership is enough for development on the owner's devices and for Ad Hoc builds for family and friends. App Store release waits for the organization account.
+- Team `56S59F5D36` (Tomas Petrik) is the signing team for PetrikVPN. An individual paid membership is enough for development on the owner's devices and for Ad Hoc builds for family and friends. App Store organization enrollment can come later.
 - New Xcode target `PacketTunnel` (`NEPacketTunnelProvider`) using WireGuardKit from wireguard-apple. Its wireguard-go bridge needs the Go toolchain during the Xcode build.
 - The wstunnel client is compiled from Rust as an XCFramework and started inside the extension before WireGuard, which uses endpoint `127.0.0.1:<port>`.
 - The extension's memory limit (about 50 MB) is measured in the spike. The minimum iOS version is likely raised to 15.

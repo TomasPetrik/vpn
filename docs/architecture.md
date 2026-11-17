@@ -6,7 +6,7 @@ Related documents: [Flutter](flutter_architecture.md) · [Backend](backend_archi
 
 ## 1. Scope of v1
 
-**Product:** **PetrikVPN** (`com.petrixon.vpn`), a general-purpose VPN with one server in Germany, for family and friends at first (10–20 active users).
+**Product:** **PetrikVPN** (`cz.tomaspetrik.petrikvpn`), a general-purpose VPN with one server in Germany, for family and friends at first (10–20 active users).
 
 **In scope:** first launch, automatic device registration and user creation, VPN connect and disconnect, basic connection status, basic server information, **force upgrade controlled from the admin panel**, and a minimal admin panel (login, users, devices, peer status, server status, app update policy).
 
@@ -174,7 +174,7 @@ ru_eu_vpn/
 | --- | --- | --- | --- |
 | R1 | **No ready-made mobile wstunnel library.** It must be embedded through Rust FFI (or by running the Android binary). The iOS Packet Tunnel memory limit is about 50 MB. | High | Spike first on both platforms. Fallback: implement the wstunnel client protocol as a wireguard-go `Bind` ([ADR-0006](decisions/0006-native-vpn-engine.md)). |
 | R2 | ~~The existing wstunnel is an open relay into the VPS (finding F1).~~ | Fixed 2026-11-16 | Change C6 applied: only UDP to `127.0.0.1:51820` is allowed. |
-| R3 | App store distribution: Apple requires VPN apps on the App Store to be published by an organization account; team `RL5SKRM28G` is still individual (enrollment in progress). | Medium | v1 goes to family and friends through test channels (section 9); App Store release after the organization enrollment. |
+| R3 | App store distribution: Apple requires VPN apps on the App Store to be published by an organization account; team `56S59F5D36` is individual for now. | Medium | v1 goes to family and friends through test channels (section 9); App Store release after organization enrollment if required. |
 | R4 | DPI and blocking: `ws://` is easy to detect; the Rust TLS fingerprint differs from browsers; blocking one domain or IP takes down both the API and the tunnel. | High | Use `wss` on 443 with a real certificate and a secret path. Later, separate domains or IPs and an alternative transport. |
 | R5 | Shared VPS: VPN egress, abuse reports and blocklisting affect `radarcut.com`. The Hostinger terms for VPN/proxy use are unverified. | Low for 10–20 known users; **accepted by the owner for v1** | Block SMTP, isolate `wg1`; a dedicated VPN VPS or IP if the user base grows. |
 | R6 | WireGuard over WebSocket/TCP: TCP-over-TCP slowdowns on lossy mobile networks; MTU issues. | Medium | MTU 1280, WebSocket ping, measure. |
@@ -197,8 +197,8 @@ ru_eu_vpn/
 | Positioning | A general-purpose VPN, no country-specific targeting. The anti-blocking transport (wstunnel over 443) is a general feature for restrictive networks. |
 | Server | One VPS in Germany (`DE`), no bandwidth limit for now |
 | Users | Family and friends, about 10–20 active users |
-| App name and IDs | **PetrikVPN**, `com.petrixon.vpn` on both platforms (details in [flutter_architecture.md](flutter_architecture.md)) |
-| Apple | Team `RL5SKRM28G`: **paid** Apple Developer Program membership, individual for now, organization enrollment in progress; the app must work for the owner first |
+| App name and IDs | **PetrikVPN**, `cz.tomaspetrik.petrikvpn` on both platforms (details in [flutter_architecture.md](flutter_architecture.md)) |
+| Apple | Team `56S59F5D36` (Tomas Petrik): individual paid membership for development and Ad Hoc; organization enrollment later if needed for App Store VPN |
 | Google Play | Account exists |
 | New requirement | Force upgrade controlled from the admin panel ([ADR-0007](decisions/0007-force-upgrade.md)) |
 
@@ -220,7 +220,7 @@ ru_eu_vpn/
 ## 10. Phase plan
 
 - **Phase 2:**
-  - Foundation: git, app rename to PetrikVPN / `com.petrixon.vpn`.
+  - Foundation: git, app rename to PetrikVPN / `cz.tomaspetrik.petrikvpn`.
   - Server setup C2, C3, C8, C4, C5; none of them touches the owner's VPN.
   - Backend skeleton with registration **and the force-upgrade API**.
   - Flutter skeleton with registration **and the force-upgrade gate**.

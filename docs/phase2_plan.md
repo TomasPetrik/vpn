@@ -30,7 +30,7 @@ A real VPN connection from the app is **Phase 3**; in Phase 2 only the spikes co
 | --- | --- |
 | A1 | Repo already on GitHub (`TomasPetrik/vpn`). Extend `.gitignore` for secrets, generated code, keys and keystores. |
 | A2 | Install the missing toolchains: Go, `sqlc` and `goose` (backend); Rust via `rustup` with the Android and iOS targets, plus `cargo-ndk` (spikes). Start Docker Desktop for a local MySQL 8.0. |
-| A3 | App identity: rename to **PetrikVPN** / `com.petrixon.vpn` (Android `applicationId`, `namespace` and Kotlin package; iOS bundle ID and display name; iOS deployment target 15.0). Verify that it runs on the owner's devices. |
+| A3 | App identity: rename to **PetrikVPN** / `cz.tomaspetrik.petrikvpn` (Android `applicationId`, `namespace` and Kotlin package; iOS bundle ID and display name; iOS deployment target 15.0). Verify that it runs on the owner's devices. |
 
 ### B. Backend skeleton
 

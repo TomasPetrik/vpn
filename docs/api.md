@@ -32,7 +32,7 @@ Called on every app start and every return to the foreground. No authentication.
     "status": "required",
     "min_supported_build": 14,
     "latest_build": 15,
-    "update_url": "https://play.google.com/apps/testing/com.petrixon.vpn",
+    "update_url": "https://play.google.com/apps/testing/cz.tomaspetrik.petrikvpn",
     "message": "Please update PetrikVPN to keep using the VPN."
   }
 }

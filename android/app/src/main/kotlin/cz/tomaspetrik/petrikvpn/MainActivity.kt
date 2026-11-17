@@ -1,4 +1,4 @@
-package com.petrixon.vpn
+package cz.tomaspetrik.petrikvpn
 
 import io.flutter.embedding.android.FlutterActivity
 
