@@ -1,6 +1,25 @@
 {{template "header" .}}
-<h1>Server status</h1>
-<p>Users: <strong>{{.Users}}</strong></p>
-<p>Devices: <strong>{{.Devices}}</strong></p>
-<p>Peer and wstunnel live status will appear when WireGuard provisioning is enabled (Phase 3).</p>
+<h1>Status</h1>
+<p class="page-intro">Live overview of registered users and devices on this VPN server.</p>
+
+<div class="stat-grid">
+  <div class="stat">
+    <div>
+      <p class="label">Users</p>
+      <p class="value">{{.Users}}</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    </div>
+  </div>
+  <div class="stat">
+    <div>
+      <p class="label">Devices</p>
+      <p class="value">{{.Devices}}</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+    </div>
+  </div>
+</div>
 {{template "footer" .}}

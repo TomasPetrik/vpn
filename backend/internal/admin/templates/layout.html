@@ -4,28 +4,585 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PetrikVPN Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; color: #111; background: #f7f7f7; }
-    nav a { margin-right: 1rem; }
-    table { border-collapse: collapse; width: 100%; background: #fff; }
-    th, td { border: 1px solid #ddd; padding: .5rem .75rem; text-align: left; font-size: .9rem; }
-    th { background: #eee; }
-    .card { background: #fff; padding: 1.25rem; border: 1px solid #ddd; max-width: 28rem; }
-    .error { color: #b00020; }
-    input, button, select, textarea { font: inherit; padding: .4rem .55rem; margin: .25rem 0; width: 100%; box-sizing: border-box; }
-    button { width: auto; cursor: pointer; }
-    label { display: block; margin-top: .75rem; font-size: .85rem; }
+    /* Tokens mirrored from RadarCut (product_affiliate_platform/src/app/globals.css) */
+    :root {
+      --background: #fafaf8;
+      --foreground: #111111;
+      --card: #ffffff;
+      --card-foreground: #111111;
+      --primary: #111111;
+      --primary-foreground: #ffffff;
+      --secondary: #f3f3f0;
+      --secondary-foreground: #111111;
+      --muted: #f3f3f0;
+      --muted-foreground: #6b6b6b;
+      --accent: #f3f3f0;
+      --accent-foreground: #111111;
+      --destructive: #b42318;
+      --border: #e8e8e5;
+      --input: #e8e8e5;
+      --ring: #111111;
+      --cta-hover: #2a2a2a;
+      --accent-warm: #e87561;
+      --radius: 0.75rem;
+      --shadow-card: 0 1px 2px rgb(17 17 17 / 0.04);
+      --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+      --font-heading: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+      --sidebar-w: 16rem;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--foreground);
+      background: var(--background);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: .82em;
+    }
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin: 0;
+      color: var(--foreground);
+    }
+    h2 {
+      font-family: var(--font-heading);
+      font-size: .95rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 .75rem;
+    }
+    p { margin: 0 0 .75rem; }
+    .muted { color: var(--muted-foreground); }
+    .error { color: var(--destructive); }
+
+    /* Shell — matches admin/(dashboard)/layout.tsx */
+    .shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      display: none;
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: rgb(243 243 240 / 0.2); /* muted/20 */
+      padding: 1rem;
+    }
+    .sidebar-inner { display: flex; height: 100%; flex-direction: column; gap: 1.5rem; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: 0 .5rem;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark {
+      width: 1.25rem;
+      height: 1.25rem;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .nav-group {
+      display: flex;
+      flex-direction: column;
+      gap: .25rem;
+      border-left: 1px solid rgb(232 232 229 / 0.6);
+      padding-left: .5rem;
+    }
+    .nav-group + .nav-group {
+      margin-top: .75rem;
+      border-top: 1px solid var(--border);
+      padding-top: .75rem;
+    }
+    .nav-label {
+      padding: 0 .5rem .25rem;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: rgb(107 107 107 / 0.7);
+    }
+    .nav a {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      border-radius: .375rem;
+      padding: .5rem;
+      font-size: .875rem;
+      font-weight: 500;
+      color: var(--muted-foreground);
+      transition: background .15s, color .15s;
+    }
+    .nav a:hover { background: var(--muted); color: var(--foreground); }
+    .nav a.active { background: rgb(17 17 17 / 0.1); color: var(--primary); }
+    .nav a svg { width: 1rem; height: 1rem; flex-shrink: 0; }
+
+    .content-col { display: flex; min-width: 0; flex: 1; flex-direction: column; min-height: 100vh; }
+    .topbar {
+      display: flex;
+      height: 4rem;
+      align-items: center;
+      gap: 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--background);
+      padding: 0 1rem;
+    }
+    .topbar-spacer { flex: 1; }
+    .menu-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border: 0;
+      border-radius: .75rem;
+      background: transparent;
+      cursor: pointer;
+      color: var(--foreground);
+      margin: 0;
+      padding: 0;
+    }
+    .menu-btn:hover { background: var(--muted); }
+    .main {
+      min-width: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .main > .split { flex: 1; min-height: 0; }
+
+    /* Mobile sheet */
+    .sheet-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgb(17 17 17 / 0.35);
+      z-index: 40;
+    }
+    .sheet {
+      display: none;
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 18rem;
+      z-index: 50;
+      background: var(--background);
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+    body.nav-open .sheet-backdrop,
+    body.nav-open .sheet { display: block; }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      overflow: hidden;
+      border-radius: calc(var(--radius) + 0.15rem);
+      background: var(--card);
+      color: var(--card-foreground);
+      box-shadow: var(--shadow-card);
+      ring: 1px;
+      outline: 1px solid rgb(17 17 17 / 0.1);
+      padding: 1rem;
+      max-width: 52rem;
+    }
+    .card + .card { margin-top: 1rem; }
+    .card h2 { margin: 0; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: 1rem;
+      max-width: 40rem;
+    }
+    .stat {
+      border-radius: calc(var(--radius) + 0.15rem);
+      background: var(--card);
+      outline: 1px solid rgb(17 17 17 / 0.1);
+      box-shadow: var(--shadow-card);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: .75rem;
+    }
+    .stat .label { font-size: .75rem; font-weight: 500; color: var(--muted-foreground); margin: 0; }
+    .stat .value {
+      margin: .25rem 0 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.15;
+    }
+    .stat .icon {
+      border-radius: .5rem;
+      background: rgb(17 17 17 / 0.1);
+      color: var(--primary);
+      padding: .5rem;
+      display: inline-flex;
+    }
+    .stat .icon svg { width: 1rem; height: 1rem; }
+
+    .panel {
+      border-radius: calc(var(--radius) + 0.15rem);
+      outline: 1px solid var(--border);
+      background: var(--card);
+      overflow: hidden;
+      max-width: 72rem;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem;
+    }
+    .panel-head h2 { margin: 0; font-size: .875rem; font-weight: 600; font-family: var(--font-sans); letter-spacing: 0; }
+
+    .table-wrap { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; caption-side: bottom; font-size: .875rem; }
+    th, td {
+      padding: .5rem;
+      text-align: left;
+      vertical-align: middle;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      height: 2.5rem;
+      font-weight: 500;
+      white-space: nowrap;
+      color: var(--foreground);
+      background: transparent;
+    }
+    tbody tr:hover td { background: rgb(243 243 240 / 0.5); }
+    tr:last-child td { border-bottom: 0; }
+    .kv th {
+      width: 12rem;
+      color: var(--muted-foreground);
+      font-weight: 500;
+      white-space: normal;
+    }
+    .kv td { word-break: break-word; }
+
+    label {
+      display: block;
+      font-size: .875rem;
+      font-weight: 500;
+      margin-top: .85rem;
+    }
+    input, select, textarea {
+      display: block;
+      width: 100%;
+      margin-top: .35rem;
+      height: 2rem;
+      padding: .25rem .625rem;
+      border: 1px solid var(--input);
+      border-radius: .5rem;
+      background: transparent;
+      font: inherit;
+      color: var(--foreground);
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    textarea { height: auto; padding: .5rem .625rem; }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--ring);
+      box-shadow: 0 0 0 3px rgb(17 17 17 / 0.2);
+    }
+
+    button, .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .375rem;
+      height: 2rem;
+      padding: 0 .625rem;
+      margin: 0;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      font: inherit;
+      font-size: .875rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s, border-color .15s, color .15s;
+    }
+    button:hover, .btn:hover { background: var(--cta-hover); color: var(--primary-foreground); }
+    button:active, .btn:active { transform: translateY(1px); }
+    button.outline, .btn.outline {
+      background: var(--background);
+      color: var(--foreground);
+      border-color: var(--border);
+    }
+    button.outline:hover, .btn.outline:hover {
+      background: var(--muted);
+      border-color: rgb(17 17 17 / 0.2);
+      color: var(--foreground);
+    }
+    button.ghost, .btn.ghost {
+      background: transparent;
+      color: var(--foreground);
+      border-color: transparent;
+    }
+    button.ghost:hover, .btn.ghost:hover { background: var(--muted); }
+    button.sm, .btn.sm { height: 1.75rem; font-size: .8rem; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .85rem; }
+    form button { margin-top: .85rem; }
+    .btn-row button, .topbar button, .menu-btn { margin-top: 0; }
+
+    details.panel-item {
+      margin: .65rem 0;
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      background: var(--muted);
+      overflow: hidden;
+    }
+    details.panel-item summary {
+      cursor: pointer;
+      padding: .7rem .9rem;
+      font-weight: 600;
+      list-style: none;
+    }
+    details.panel-item summary::-webkit-details-marker { display: none; }
+    details.panel-item .panel-body { padding: 0 .9rem .9rem; }
+    pre.code {
+      background: #f0f0ec;
+      border: 1px solid var(--border);
+      border-radius: .65rem;
+      padding: .75rem;
+      overflow: auto;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      color: var(--muted-foreground);
+      font-size: .875rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+    }
+    .back:hover { color: var(--foreground); }
+    .page-intro { margin: .25rem 0 1.25rem; color: var(--muted-foreground); font-size: .875rem; }
+
+    /* Master–detail: list stays visible while detail swaps on the right */
+    .split {
+      display: grid;
+      grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+      gap: 1rem;
+      align-items: stretch;
+      min-height: calc(100vh - 7.5rem);
+    }
+    .master, .detail {
+      border-radius: calc(var(--radius) + 0.15rem);
+      outline: 1px solid var(--border);
+      background: var(--card);
+      box-shadow: var(--shadow-card);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .master-head, .detail-head {
+      padding: .85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .master-head h1, .detail-head h1, .detail-head h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .master-head p, .detail-head p {
+      margin: .2rem 0 0;
+      font-size: .8rem;
+      color: var(--muted-foreground);
+    }
+    .master-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: .4rem;
+    }
+    .master-item {
+      display: block;
+      padding: .65rem .7rem;
+      border-radius: .55rem;
+      color: var(--foreground);
+      transition: background .12s;
+    }
+    .master-item:hover { background: var(--muted); }
+    .master-item.active {
+      background: rgb(17 17 17 / 0.1);
+      color: var(--primary);
+    }
+    .master-item .title {
+      font-weight: 600;
+      font-size: .875rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+    }
+    .master-item .meta {
+      margin-top: .15rem;
+      font-size: .75rem;
+      color: var(--muted-foreground);
+      word-break: break-all;
+    }
+    .master-item.active .meta { color: rgb(107 107 107 / 0.9); }
+    .detail-body {
+      overflow: auto;
+      flex: 1;
+      padding: 1rem;
+    }
+    .empty-detail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: .35rem;
+      min-height: 14rem;
+      color: var(--muted-foreground);
+      padding: 2rem 1rem;
+    }
+    .empty-detail strong { color: var(--foreground); font-weight: 600; }
+    .detail .card {
+      max-width: none;
+      outline: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .detail .card + .card { margin-top: .85rem; }
+
+    @media (max-width: 900px) {
+      .split {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+      .master { max-height: 40vh; }
+    }
+
+    @media (min-width: 1024px) {
+      .sidebar { display: block; }
+      .menu-btn { display: none; }
+      .topbar { padding: 0 1.5rem; }
+      .main { padding: 1.5rem; }
+    }
   </style>
 </head>
 <body>
-<nav>
-  <a href="/admin">Status</a>
-  <a href="/admin/users">Users</a>
-  <a href="/admin/devices">Devices</a>
-  <a href="/admin/app-versions">App versions</a>
-  <a href="/admin/database">Database</a>
-  <form method="post" action="/admin/logout" style="display:inline"><button type="submit">Logout</button></form>
-</nav>
-<hr>
+<div class="sheet-backdrop" id="nav-backdrop" hidden></div>
+<aside class="sheet" id="nav-sheet" aria-label="Admin navigation">
+  <div class="sidebar-inner" id="mobile-nav"></div>
+</aside>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-inner" id="desktop-nav">
+      <a class="brand" href="/admin">
+        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+          <circle cx="12" cy="12" r="4" fill="currentColor"/>
+        </svg>
+        PetrikVPN Admin
+      </a>
+      <nav class="nav" id="admin-nav">
+        <div class="nav-group">
+          <a href="/admin" data-match="^/admin/?$">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            Status
+          </a>
+        </div>
+        <div class="nav-group">
+          <p class="nav-label">VPN</p>
+          <a href="/admin/users" data-match="^/admin/users">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+          </a>
+          <a href="/admin/devices" data-match="^/admin/devices">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+            Devices
+          </a>
+        </div>
+        <div class="nav-group">
+          <p class="nav-label">App</p>
+          <a href="/admin/app-versions" data-match="^/admin/app-versions">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m7.8 16.2-2.9 2.9"/><path d="M6 12H2"/><path d="m7.8 7.8-2.9-2.9"/><circle cx="12" cy="12" r="3"/></svg>
+            App versions
+          </a>
+        </div>
+        <div class="nav-group">
+          <p class="nav-label">System</p>
+          <a href="/admin/database" data-match="^/admin/database">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            Database
+          </a>
+        </div>
+      </nav>
+    </div>
+  </aside>
+  <div class="content-col">
+    <header class="topbar">
+      <button type="button" class="menu-btn" id="nav-open" aria-label="Open admin menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+      </button>
+      <div class="topbar-spacer"></div>
+      <form method="post" action="/admin/logout">
+        <button type="submit" class="outline sm">Sign out</button>
+      </form>
+    </header>
+    <main class="main">
 {{end}}
-{{define "footer"}}</body></html>{{end}}
+{{define "footer"}}
+    </main>
+  </div>
+</div>
+<script>
+(function () {
+  var path = location.pathname.replace(/\/+$/, '') || '/';
+  document.querySelectorAll('#admin-nav a').forEach(function (a) {
+    var re = new RegExp(a.getAttribute('data-match'));
+    if (re.test(path)) a.classList.add('active');
+  });
+
+  var desktop = document.getElementById('desktop-nav');
+  var mobile = document.getElementById('mobile-nav');
+  if (desktop && mobile) mobile.innerHTML = desktop.innerHTML;
+
+  var openBtn = document.getElementById('nav-open');
+  var backdrop = document.getElementById('nav-backdrop');
+  function closeNav() { document.body.classList.remove('nav-open'); }
+  if (openBtn) openBtn.addEventListener('click', function () { document.body.classList.add('nav-open'); });
+  if (backdrop) {
+    backdrop.hidden = false;
+    backdrop.addEventListener('click', closeNav);
+  }
+  document.querySelectorAll('#mobile-nav a').forEach(function (a) {
+    a.addEventListener('click', closeNav);
+  });
+})();
+</script>
+</body>
+</html>
+{{end}}

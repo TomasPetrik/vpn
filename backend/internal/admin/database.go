@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -19,69 +18,44 @@ type dbTableInfo struct {
 }
 
 type dbColumnInfo struct {
-	Name       string
-	Type       string
-	Nullable   string
-	Key        string
-	Default    string
-	Extra      string
-	Comment    string
+	Name     string
+	Type     string
+	Nullable string
+	Key      string
+	Default  string
+	Extra    string
+	Comment  string
 }
 
 func (h *Handler) DatabaseIndex(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`
-		SELECT table_name, table_rows, engine, COALESCE(table_comment, '')
-		FROM information_schema.tables
-		WHERE table_schema = DATABASE()
-		ORDER BY table_name`)
+	tables, dbName, err := h.listDBTables()
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	defer rows.Close()
-
-	var tables []dbTableInfo
-	for rows.Next() {
-		var t dbTableInfo
-		var engine sql.NullString
-		var approx sql.NullInt64
-		if err := rows.Scan(&t.Name, &approx, &engine, &t.Comment); err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		if engine.Valid {
-			t.Engine = engine.String
-		}
-		// Exact count for small admin DB
-		var exact int64
-		q := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", t.Name)
-		if err := h.DB.QueryRow(q).Scan(&exact); err == nil {
-			t.Rows = exact
-		} else if approx.Valid {
-			t.Rows = approx.Int64
-		}
-		tables = append(tables, t)
-	}
-
-	var dbName string
-	_ = h.DB.QueryRow(`SELECT DATABASE()`).Scan(&dbName)
-
 	_ = h.Tmpl.ExecuteTemplate(w, "database.html", map[string]any{
-		"DBName": dbName,
-		"Tables": tables,
-		"CSRF":   csrfFrom(r),
+		"DBName": dbName, "Tables": tables, "SelectedTable": "", "CSRF": csrfFrom(r),
 	})
 }
 
 func (h *Handler) DatabaseTable(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimPrefix(r.URL.Path, "/admin/database/")
-	name = strings.Trim(name, "/")
+	name := r.PathValue("table")
+	if name == "" {
+		name = strings.TrimPrefix(r.URL.Path, "/admin/database/")
+		name = strings.Trim(name, "/")
+	}
 	if name == "" || !safeIdent.MatchString(name) {
 		http.Error(w, "invalid table", 400)
 		return
 	}
 	if !h.tableExists(name) {
 		http.Error(w, "table not found", 404)
+		return
+	}
+
+	tables, dbName, err := h.listDBTables()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
@@ -139,17 +113,20 @@ func (h *Handler) DatabaseTable(w http.ResponseWriter, r *http.Request) {
 		preview = append(preview, line)
 	}
 
-	_ = h.Tmpl.ExecuteTemplate(w, "database_table.html", map[string]any{
-		"Table":    name,
-		"Columns":  cols,
-		"ColNames": colNames,
-		"Rows":     preview,
-		"Total":    total,
-		"Limit":    limit,
-		"Offset":   offset,
-		"Next":     offset + limit,
-		"HasMore":  int64(offset+limit) < total,
-		"CSRF":     csrfFrom(r),
+	_ = h.Tmpl.ExecuteTemplate(w, "database.html", map[string]any{
+		"DBName":        dbName,
+		"Tables":        tables,
+		"SelectedTable": name,
+		"Table":         name,
+		"Columns":       cols,
+		"ColNames":      colNames,
+		"Rows":          preview,
+		"Total":         total,
+		"Limit":         limit,
+		"Offset":        offset,
+		"Next":          offset + limit,
+		"HasMore":       int64(offset+limit) < total,
+		"CSRF":          csrfFrom(r),
 	})
 }
 
@@ -189,7 +166,6 @@ func formatCell(v any) string {
 	}
 	switch t := v.(type) {
 	case []byte:
-		// Hide binary hashes/tokens in preview
 		if len(t) == 32 {
 			return fmt.Sprintf("<binary %d bytes>", len(t))
 		}

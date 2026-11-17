@@ -102,67 +102,47 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`
-		SELECT u.id, u.status, u.created_at, COUNT(d.id)
-		FROM users u LEFT JOIN devices d ON d.user_id = u.id
-		GROUP BY u.id ORDER BY u.created_at DESC LIMIT 200`)
+	list, err := h.listUsers(200)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	defer rows.Close()
-	type row struct {
-		ID, Status, Created string
-		Devices             int
-	}
-	var list []row
-	for rows.Next() {
-		var x row
-		var created time.Time
-		if err := rows.Scan(&x.ID, &x.Status, &created, &x.Devices); err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		x.Created = created.Format(time.RFC3339)
-		list = append(list, x)
-	}
-	_ = h.Tmpl.ExecuteTemplate(w, "users.html", map[string]any{"Users": list, "CSRF": csrfFrom(r)})
+	_ = h.Tmpl.ExecuteTemplate(w, "users.html", map[string]any{
+		"Users": list, "SelectedID": "", "CSRF": csrfFrom(r),
+	})
 }
 
 func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.DB.Query(`
-		SELECT d.id, d.platform, COALESCE(d.model,''), COALESCE(d.os_version,''),
-			COALESCE(d.app_version,''), COALESCE(d.app_build,0), COALESCE(d.last_seen_at, d.created_at),
-			(SELECT COUNT(*) FROM wireguard_peers p WHERE p.device_id = d.id) AS peer_count
-		FROM devices d ORDER BY d.created_at DESC LIMIT 200`)
+	list, err := h.listDevices(200)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	defer rows.Close()
-	type row struct {
-		ID, Platform, Model, OS, AppVersion, LastSeen string
-		Build, PeerCount                              int
-	}
-	var list []row
-	for rows.Next() {
-		var x row
-		var last time.Time
-		if err := rows.Scan(&x.ID, &x.Platform, &x.Model, &x.OS, &x.AppVersion, &x.Build, &last, &x.PeerCount); err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		x.LastSeen = last.Format(time.RFC3339)
-		list = append(list, x)
-	}
-	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{"Devices": list, "CSRF": csrfFrom(r)})
+	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
+		"Devices": list, "SelectedID": "", "CSRF": csrfFrom(r),
+	})
 }
 
 func (h *Handler) AppVersionsGet(w http.ResponseWriter, r *http.Request) {
+	platform := r.PathValue("platform")
+	if platform == "" {
+		platform = r.URL.Query().Get("platform")
+	}
+	if platform != "android" && platform != "ios" {
+		platform = ""
+	}
 	android := h.Updates.Policy("android")
 	ios := h.Updates.Policy("ios")
+	var selected any
+	switch platform {
+	case "android":
+		selected = android
+	case "ios":
+		selected = ios
+	}
 	_ = h.Tmpl.ExecuteTemplate(w, "app_versions.html", map[string]any{
-		"Android": android, "IOS": ios, "CSRF": csrfFrom(r), "Flash": "",
+		"Android": android, "IOS": ios, "Selected": selected, "SelectedPlatform": platform,
+		"CSRF": csrfFrom(r), "Flash": "",
 	})
 }
 
@@ -194,7 +174,7 @@ func (h *Handler) AppVersionsPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/admin/app-versions", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/app-versions/"+platform, http.StatusSeeOther)
 }
 
 func readSessionCookie(r *http.Request) string {

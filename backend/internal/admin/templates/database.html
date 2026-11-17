@@ -1,17 +1,83 @@
 {{template "header" .}}
-<h1>Database</h1>
-<p>Schema: <strong>{{.DBName}}</strong> (read-only preview)</p>
-<table>
-  <tr><th>Table</th><th>Rows</th><th>Engine</th><th>Comment</th></tr>
-  {{range .Tables}}
-  <tr>
-    <td><a href="/admin/database/{{.Name}}">{{.Name}}</a></td>
-    <td>{{.Rows}}</td>
-    <td>{{.Engine}}</td>
-    <td>{{.Comment}}</td>
-  </tr>
-  {{else}}
-  <tr><td colspan="4">No tables</td></tr>
-  {{end}}
-</table>
+<div class="split">
+  <aside class="master">
+    <div class="master-head">
+      <h1>Database</h1>
+      <p>Schema <strong>{{.DBName}}</strong> · {{len .Tables}} tables</p>
+    </div>
+    <div class="master-list">
+      {{range .Tables}}
+      <a class="master-item{{if eq $.SelectedTable .Name}} active{{end}}" href="/admin/database/{{.Name}}">
+        <div class="title">
+          <span>{{.Name}}</span>
+          <span class="muted">{{.Rows}}</span>
+        </div>
+        <div class="meta">{{.Engine}}{{if .Comment}} · {{.Comment}}{{end}}</div>
+      </a>
+      {{else}}
+      <div class="empty-detail">No tables</div>
+      {{end}}
+    </div>
+  </aside>
+
+  <section class="detail">
+    {{if .SelectedTable}}
+    <div class="detail-head">
+      <h2>{{.Table}}</h2>
+      <p>{{.Total}} row(s) · showing {{.Limit}} from offset {{.Offset}}</p>
+    </div>
+    <div class="detail-body">
+      <div class="card">
+        <h2>Columns</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Null</th><th>Key</th><th>Default</th><th>Extra</th></tr>
+            </thead>
+            <tbody>
+              {{range .Columns}}
+              <tr>
+                <td>{{.Name}}</td>
+                <td>{{.Type}}</td>
+                <td>{{.Nullable}}</td>
+                <td>{{.Key}}</td>
+                <td>{{.Default}}</td>
+                <td>{{.Extra}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Data preview</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>{{range .ColNames}}<th>{{.}}</th>{{end}}</tr>
+            </thead>
+            <tbody>
+              {{range .Rows}}
+              <tr>{{range .}}<td><code>{{.}}</code></td>{{end}}</tr>
+              {{else}}
+              <tr><td colspan="99" class="muted">No rows</td></tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{if .HasMore}}
+        <div class="btn-row">
+          <a class="btn outline sm" href="/admin/database/{{.Table}}?offset={{.Next}}&limit={{.Limit}}">Next page →</a>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{else}}
+    <div class="empty-detail">
+      <strong>Select a table</strong>
+      <span>Browse schema and a read-only data preview on the right.</span>
+    </div>
+    {{end}}
+  </section>
+</div>
 {{template "footer" .}}

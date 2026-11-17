@@ -1,18 +1,44 @@
 {{template "header" .}}
-<h1>Confirm update policy</h1>
-<p>Platform: <strong>{{.Platform}}</strong></p>
-<p>Minimum build: <strong>{{.Min}}</strong></p>
-<p>Latest build: <strong>{{.Latest}}</strong></p>
-<p>This would currently block <strong>{{.Blocked}}</strong> device(s) with a known build below the minimum.</p>
-<form method="post" action="/admin/app-versions">
-  <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <input type="hidden" name="platform" value="{{.Platform}}">
-  <input type="hidden" name="min_supported_build" value="{{.Min}}">
-  <input type="hidden" name="latest_build" value="{{.Latest}}">
-  <input type="hidden" name="update_url" value="{{.URL}}">
-  <input type="hidden" name="message" value="{{.Message}}">
-  <input type="hidden" name="confirm" value="1">
-  <button type="submit">Confirm and save</button>
-  <a href="/admin/app-versions">Cancel</a>
-</form>
+<div class="split">
+  <aside class="master">
+    <div class="master-head">
+      <h1>App versions</h1>
+      <p>Confirm policy change</p>
+    </div>
+    <div class="master-list">
+      <a class="master-item{{if eq .Platform "android"}} active{{end}}" href="/admin/app-versions/android">
+        <div class="title"><span>android</span></div>
+      </a>
+      <a class="master-item{{if eq .Platform "ios"}} active{{end}}" href="/admin/app-versions/ios">
+        <div class="title"><span>ios</span></div>
+      </a>
+    </div>
+  </aside>
+  <section class="detail">
+    <div class="detail-head">
+      <h2>Confirm {{.Platform}}</h2>
+      <p>Minimum {{.Min}} · latest {{.Latest}}</p>
+    </div>
+    <div class="detail-body">
+      <div class="card">
+        <p class="page-intro" style="margin:0">
+          This would currently block <strong>{{.Blocked}}</strong> device(s) with a known build below the minimum.
+        </p>
+        <form method="post" action="/admin/app-versions">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <input type="hidden" name="platform" value="{{.Platform}}">
+          <input type="hidden" name="min_supported_build" value="{{.Min}}">
+          <input type="hidden" name="latest_build" value="{{.Latest}}">
+          <input type="hidden" name="update_url" value="{{.URL}}">
+          <input type="hidden" name="message" value="{{.Message}}">
+          <input type="hidden" name="confirm" value="1">
+          <div class="btn-row">
+            <button type="submit">Confirm and save</button>
+            <a class="btn outline" href="/admin/app-versions/{{.Platform}}">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
 {{template "footer" .}}

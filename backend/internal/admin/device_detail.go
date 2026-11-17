@@ -39,6 +39,28 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	list, err := h.listDevices(200)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	d, err := h.loadDeviceDetail(r, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
+		"Devices": list, "SelectedID": id, "Device": d, "CSRF": csrfFrom(r),
+	})
+}
+
+func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView, error) {
 	var (
 		d                          deviceDetailView
 		lastSeen                   sql.NullTime
@@ -56,13 +78,8 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		&manufacturer, &model, &osVer, &appVersion, &appBuild,
 		&installationID, &lastSeen, &created, &updated,
 	)
-	if errors.Is(err, sql.ErrNoRows) {
-		http.NotFound(w, r)
-		return
-	}
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+		return d, err
 	}
 	d.Manufacturer = nullString(manufacturer)
 	d.Model = nullString(model)
@@ -140,16 +157,11 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		h.fillPeerConfigViews(&d, tunnelIP)
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, err.Error(), 500)
-		return
+		return d, err
 	}
 
 	d.Panels = h.buildArtifactPanels(&d)
-
-	_ = h.Tmpl.ExecuteTemplate(w, "device_detail.html", map[string]any{
-		"Device": d,
-		"CSRF":   csrfFrom(r),
-	})
+	return d, nil
 }
 
 func (h *Handler) fillPeerConfigViews(d *deviceDetailView, tunnelIP uint32) {

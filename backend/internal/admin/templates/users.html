@@ -1,11 +1,76 @@
 {{template "header" .}}
-<h1>Users</h1>
-<table>
-  <tr><th>ID</th><th>Status</th><th>Created</th><th>Devices</th></tr>
-  {{range .Users}}
-  <tr><td>{{.ID}}</td><td>{{.Status}}</td><td>{{.Created}}</td><td>{{.Devices}}</td></tr>
-  {{else}}
-  <tr><td colspan="4">No users yet</td></tr>
-  {{end}}
-</table>
+<div class="split">
+  <aside class="master">
+    <div class="master-head">
+      <h1>Users</h1>
+      <p>{{len .Users}} accounts</p>
+    </div>
+    <div class="master-list">
+      {{range .Users}}
+      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/users/{{.ID}}">
+        <div class="title">
+          <span>{{.Status}}</span>
+          <span class="muted">{{.Devices}} device{{if ne .Devices 1}}s{{end}}</span>
+        </div>
+        <div class="meta">{{.ID}}</div>
+        <div class="meta">{{.Created}}</div>
+      </a>
+      {{else}}
+      <div class="empty-detail">No users yet</div>
+      {{end}}
+    </div>
+  </aside>
+
+  <section class="detail">
+    {{if .User}}
+    <div class="detail-head">
+      <h2>User</h2>
+      <p><code>{{.User.ID}}</code></p>
+    </div>
+    <div class="detail-body">
+      <div class="card">
+        <h2>Account</h2>
+        <div class="table-wrap">
+          <table class="kv">
+            <tr><th>ID</th><td><code>{{.User.ID}}</code></td></tr>
+            <tr><th>Status</th><td>{{.User.Status}}</td></tr>
+            <tr><th>Created</th><td>{{.User.Created}}</td></tr>
+            <tr><th>Devices</th><td>{{.User.DeviceCount}}</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Devices</h2>
+        {{if .User.Devices}}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Device</th><th>Platform</th><th>Model</th><th>App</th><th>Last seen</th></tr>
+            </thead>
+            <tbody>
+              {{range .User.Devices}}
+              <tr>
+                <td><a href="/admin/devices/{{.ID}}"><code>{{.ID}}</code></a></td>
+                <td>{{.Platform}}</td>
+                <td>{{.Model}}</td>
+                <td>{{.AppVersion}}</td>
+                <td>{{.LastSeen}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+        <p class="muted" style="margin:0">No devices for this user.</p>
+        {{end}}
+      </div>
+    </div>
+    {{else}}
+    <div class="empty-detail">
+      <strong>Select a user</strong>
+      <span>Pick an account to see its devices.</span>
+    </div>
+    {{end}}
+  </section>
+</div>
 {{template "footer" .}}
