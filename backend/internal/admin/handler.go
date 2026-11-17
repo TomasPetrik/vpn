@@ -127,9 +127,10 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.DB.Query(`
-		SELECT id, platform, COALESCE(model,''), COALESCE(os_version,''),
-			COALESCE(app_version,''), COALESCE(app_build,0), COALESCE(last_seen_at, created_at)
-		FROM devices ORDER BY created_at DESC LIMIT 200`)
+		SELECT d.id, d.platform, COALESCE(d.model,''), COALESCE(d.os_version,''),
+			COALESCE(d.app_version,''), COALESCE(d.app_build,0), COALESCE(d.last_seen_at, d.created_at),
+			(SELECT COUNT(*) FROM wireguard_peers p WHERE p.device_id = d.id) AS peer_count
+		FROM devices d ORDER BY d.created_at DESC LIMIT 200`)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -137,13 +138,13 @@ func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	type row struct {
 		ID, Platform, Model, OS, AppVersion, LastSeen string
-		Build                                         int
+		Build, PeerCount                              int
 	}
 	var list []row
 	for rows.Next() {
 		var x row
 		var last time.Time
-		if err := rows.Scan(&x.ID, &x.Platform, &x.Model, &x.OS, &x.AppVersion, &x.Build, &last); err != nil {
+		if err := rows.Scan(&x.ID, &x.Platform, &x.Model, &x.OS, &x.AppVersion, &x.Build, &last, &x.PeerCount); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}

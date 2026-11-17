@@ -1,10 +1,11 @@
 {{template "header" .}}
 <h1>Devices</h1>
 <table>
-  <tr><th>ID</th><th>Platform</th><th>Model</th><th>OS</th><th>App</th><th>Build</th><th>Last seen</th></tr>
+  <tr><th>Device</th><th>Platform</th><th>Model</th><th>OS</th><th>App</th><th>Build</th><th>Last seen</th></tr>
   {{range .Devices}}
   <tr>
-    <td>{{.ID}}</td><td>{{.Platform}}</td><td>{{.Model}}</td><td>{{.OS}}</td>
+    <td><a href="/admin/devices/{{.ID}}"><code>{{.ID}}</code></a></td>
+    <td>{{.Platform}}</td><td>{{.Model}}</td><td>{{.OS}}</td>
     <td>{{.AppVersion}}</td><td>{{.Build}}</td><td>{{.LastSeen}}</td>
   </tr>
   {{else}}

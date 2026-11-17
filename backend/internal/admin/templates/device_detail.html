@@ -1,0 +1,43 @@
+{{template "header" .}}
+<p><a href="/admin/devices">← Devices</a></p>
+<h1>Device detail</h1>
+
+<div class="card" style="max-width:52rem;margin-bottom:1.5rem">
+  <h2 style="margin-top:0">Device</h2>
+  <table>
+    <tr><th>ID</th><td><code>{{.Device.ID}}</code></td></tr>
+    <tr><th>User ID</th><td><code>{{.Device.UserID}}</code></td></tr>
+    <tr><th>Platform</th><td>{{.Device.Platform}}</td></tr>
+    <tr><th>Status</th><td>{{.Device.Status}}</td></tr>
+    <tr><th>Manufacturer</th><td>{{.Device.Manufacturer}}</td></tr>
+    <tr><th>Model</th><td>{{.Device.Model}}</td></tr>
+    <tr><th>OS</th><td>{{.Device.OSVersion}}</td></tr>
+    <tr><th>App</th><td>{{.Device.AppVersion}} (build {{.Device.AppBuild}})</td></tr>
+    <tr><th>Installation ID</th><td><code>{{.Device.InstallationID}}</code></td></tr>
+    <tr><th>Last seen (API)</th><td>{{.Device.LastSeen}}</td></tr>
+    <tr><th>Created</th><td>{{.Device.CreatedAt}}</td></tr>
+    <tr><th>Updated</th><td>{{.Device.UpdatedAt}}</td></tr>
+  </table>
+</div>
+
+<div class="card" style="max-width:52rem">
+  <h2 style="margin-top:0">WireGuard peer</h2>
+  {{if .Device.HasPeer}}
+  <p class="muted" style="font-size:.85rem;color:#555">{{.Device.Note}}</p>
+  <table>
+    <tr><th>Peer ID</th><td><code>{{.Device.PeerID}}</code></td></tr>
+    <tr><th>Server</th><td>{{.Device.ServerName}} (<code>{{.Device.ServerID}}</code>) · {{.Device.WGInterface}}</td></tr>
+    <tr><th>Client public key</th><td><code style="word-break:break-all">{{.Device.PeerPublicKey}}</code></td></tr>
+    <tr><th>Tunnel IP</th><td><code>{{.Device.TunnelIPv4}}</code></td></tr>
+    <tr><th>Last handshake</th><td>{{.Device.LastHandshake}}</td></tr>
+    <tr><th>RX (download to client)</th><td>{{.Device.RxHuman}} <span style="color:#777">({{.Device.RxBytes}} B)</span></td></tr>
+    <tr><th>TX (upload from client)</th><td>{{.Device.TxHuman}} <span style="color:#777">({{.Device.TxBytes}} B)</span></td></tr>
+    <tr><th>Total transferred</th><td>{{.Device.TotalHuman}}</td></tr>
+    <tr><th>Stats updated</th><td>{{.Device.StatsUpdated}}</td></tr>
+    <tr><th>Peer created</th><td>{{.Device.PeerCreated}}</td></tr>
+  </table>
+  {{else}}
+  <p>No WireGuard peer provisioned yet for this device.</p>
+  {{end}}
+</div>
+{{template "footer" .}}
