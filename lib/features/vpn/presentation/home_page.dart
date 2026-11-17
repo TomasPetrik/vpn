@@ -107,7 +107,8 @@ class HomePage extends StatelessWidget {
                     ),
                   ],
                   if (connect.peer != null &&
-                      connect.phase == VpnConnectPhase.awaitingNative) ...[
+                      (connect.phase == VpnConnectPhase.skeletonConnected ||
+                          connect.phase == VpnConnectPhase.error)) ...[
                     const SizedBox(height: 8),
                     Text(
                       'Tunnel IP: ${connect.peer!.interfaceAddresses.join(', ')}',
@@ -120,12 +121,20 @@ class HomePage extends StatelessWidget {
                         ? () => context.read<VpnConnectCubit>().connect()
                         : null,
                     child: Text(
-                      connect.phase == VpnConnectPhase.awaitingNative ||
+                      connect.phase == VpnConnectPhase.skeletonConnected ||
                               connect.phase == VpnConnectPhase.error
                           ? 'Retry connect'
                           : 'Connect',
                     ),
                   ),
+                  if (connect.canDisconnect) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () =>
+                          context.read<VpnConnectCubit>().disconnect(),
+                      child: const Text('Disconnect'),
+                    ),
+                  ],
                   if (connect.canReset) ...[
                     const SizedBox(height: 8),
                     TextButton(

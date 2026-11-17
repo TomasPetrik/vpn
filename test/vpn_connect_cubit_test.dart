@@ -43,60 +43,43 @@ void main() {
     );
     when(() => repo.upsertPeer(publicKey: any(named: 'publicKey')))
         .thenAnswer((_) async => peer);
-    when(() => engine.getPublicKey()).thenAnswer((_) async => 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+    when(() => engine.getPublicKey())
+        .thenAnswer((_) async => 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
     when(() => engine.prepare()).thenAnswer(
       (_) async => const VpnPrepareResult(
-        granted: false,
-        status: 'needs_extension',
-        message: 'PacketTunnel missing',
+        granted: true,
+        status: 'ready',
+        message: 'ok',
       ),
     );
+    when(() => engine.startTunnel()).thenAnswer(
+      (_) async => const VpnTunnelResult(
+        ok: true,
+        status: 'connecting',
+        message: 'startVPNTunnel requested',
+      ),
+    );
+    when(() => engine.getStatus()).thenAnswer(
+      (_) async => const VpnStatusSnapshot(
+        status: 'connected',
+        extensionStatus: 'skeleton_connected',
+        extensionLog: ['PacketTunnel skeleton connected'],
+      ),
+    );
+    when(() => engine.statusStream()).thenAnswer((_) => const Stream.empty());
   });
 
   blocTest<VpnConnectCubit, VpnConnectState>(
-    'connect uses native keys and stops at awaitingNative',
+    'connect starts PacketTunnel skeleton and reaches skeletonConnected',
     build: () => VpnConnectCubit(deviceRepository: repo, vpnEngine: engine),
     act: (cubit) => cubit.connect(),
-    expect: () => [
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.checkingSession,
-      ),
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.ensuringKeys,
-      ),
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.provisioningPeer,
-      ),
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.preparingVpn,
-      ),
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.startingTransport,
-      ),
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.startingTunnel,
-      ),
-      isA<VpnConnectState>()
-          .having((s) => s.phase, 'phase', VpnConnectPhase.awaitingNative)
-          .having((s) => s.peer?.peerId, 'peerId', 'peer-1'),
-    ],
-    verify: (_) {
+    wait: const Duration(milliseconds: 500),
+    verify: (cubit) {
       verify(() => engine.getPublicKey()).called(1);
       verify(() => engine.prepare()).called(1);
-      verify(() => repo.upsertPeer(publicKey: any(named: 'publicKey')))
-          .called(1);
+      verify(() => engine.startTunnel()).called(1);
+      expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
+      expect(cubit.state.peer?.peerId, 'peer-1');
     },
   );
 
