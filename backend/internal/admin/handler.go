@@ -96,8 +96,13 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	var users, devices int
 	_ = h.DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users)
 	_ = h.DB.QueryRow(`SELECT COUNT(*) FROM devices`).Scan(&devices)
+	analytics, err := h.loadAnalytics(r, "")
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	_ = h.Tmpl.ExecuteTemplate(w, "dashboard.html", map[string]any{
-		"Users": users, "Devices": devices, "CSRF": csrfFrom(r),
+		"Users": users, "Devices": devices, "Analytics": analytics, "CSRF": csrfFrom(r),
 	})
 }
 

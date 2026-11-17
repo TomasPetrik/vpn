@@ -74,6 +74,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	h.Service.TouchSeen(r.Context(), res.DeviceID, build, version, httpapi.ClientIP(r), "")
 	status := http.StatusOK
 	if res.Created {
 		status = http.StatusCreated
@@ -110,7 +111,7 @@ func AuthMiddleware(svc *Service) func(http.Handler) http.Handler {
 			}
 			build, _ := r.Context().Value(httpapi.CtxBuild).(int)
 			version, _ := r.Context().Value(httpapi.CtxVersion).(string)
-			svc.TouchBuild(r.Context(), d.ID, build, version)
+			svc.TouchSeen(r.Context(), d.ID, build, version, httpapi.ClientIP(r), "")
 			ctx := context.WithValue(r.Context(), httpapi.CtxDeviceID, d.ID)
 			ctx = context.WithValue(ctx, httpapi.CtxUserID, d.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))

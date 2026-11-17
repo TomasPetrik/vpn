@@ -14,6 +14,8 @@ import (
 type Service struct {
 	DB      *sql.DB
 	HMACKey []byte
+	// CountryOf maps a public IP to ISO country code; may be nil.
+	CountryOf func(ip string) string
 }
 
 type RegisterRequest struct {
@@ -207,13 +209,27 @@ func (s *Service) Authenticate(ctx context.Context, bearer string) (Device, erro
 }
 
 func (s *Service) TouchBuild(ctx context.Context, deviceID string, build int, version string) {
+	s.TouchSeen(ctx, deviceID, build, version, "", "")
+}
+
+// TouchSeen updates last_seen / app metadata and optional client geo.
+func (s *Service) TouchSeen(ctx context.Context, deviceID string, build int, version, clientIP, country string) {
 	if deviceID == "" {
 		return
 	}
+	if country == "" && clientIP != "" && s.CountryOf != nil {
+		country = s.CountryOf(clientIP)
+	}
 	_, _ = s.DB.ExecContext(ctx, `
-		UPDATE devices SET app_build = ?, app_version = COALESCE(NULLIF(?, ''), app_version),
-			last_seen_at = UTC_TIMESTAMP(6), updated_at = UTC_TIMESTAMP(6)
-		WHERE id = ?`, nullInt(build), version, deviceID)
+		UPDATE devices SET
+			app_build = CASE WHEN ? > 0 THEN ? ELSE app_build END,
+			app_version = COALESCE(NULLIF(?, ''), app_version),
+			last_seen_at = UTC_TIMESTAMP(6),
+			last_client_ip = COALESCE(NULLIF(?, ''), last_client_ip),
+			last_client_country = COALESCE(NULLIF(?, ''), last_client_country),
+			updated_at = UTC_TIMESTAMP(6)
+		WHERE id = ?`,
+		build, build, version, clientIP, country, deviceID)
 }
 
 func isRetryable(err error) bool {

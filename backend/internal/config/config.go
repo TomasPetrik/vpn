@@ -27,6 +27,7 @@ type Config struct {
 	ServerCity       string
 	ServerID         string
 	WGPublicKey      string
+	GeoIPCountryDB   string
 }
 
 func Load() (Config, error) {
@@ -48,6 +49,7 @@ func Load() (Config, error) {
 		ServerCity:       os.Getenv("SERVER_CITY"),
 		ServerID:         getenv("SERVER_ID", "01900000-0000-7000-8000-000000000001"),
 		WGPublicKey:      getenv("WG_PUBLIC_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+		GeoIPCountryDB:   getenv("GEOIP_COUNTRY_DB", "/var/lib/vpn-api/GeoLite2-Country.mmdb"),
 	}
 	key := os.Getenv("DEVICE_ID_HMAC_KEY")
 	if key == "" {

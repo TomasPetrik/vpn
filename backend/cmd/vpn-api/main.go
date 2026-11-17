@@ -17,6 +17,7 @@ import (
 	"github.com/TomasPetrik/vpn/backend/internal/config"
 	"github.com/TomasPetrik/vpn/backend/internal/db"
 	"github.com/TomasPetrik/vpn/backend/internal/device"
+	"github.com/TomasPetrik/vpn/backend/internal/geo"
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
 	"github.com/TomasPetrik/vpn/backend/internal/peer"
 	"github.com/TomasPetrik/vpn/backend/internal/serverinfo"
@@ -125,7 +126,13 @@ func runServe(log *slog.Logger) error {
 		return err
 	}
 
-	deviceSvc := &device.Service{DB: sqlDB, HMACKey: cfg.DeviceIDHMACKey}
+	geoLookup := geo.Open(cfg.GeoIPCountryDB, log)
+	defer geoLookup.Close()
+
+	deviceSvc := &device.Service{
+		DB: sqlDB, HMACKey: cfg.DeviceIDHMACKey,
+		CountryOf: geoLookup.Country,
+	}
 	deviceH := &device.Handler{Service: deviceSvc}
 	updateSvc := appupdate.New(sqlDB)
 	updateH := &appupdate.Handler{Service: updateSvc}

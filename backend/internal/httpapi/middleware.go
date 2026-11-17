@@ -116,7 +116,11 @@ func (l *rateLimiter) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func clientIP(r *http.Request) string {
+func clientIP(r *http.Request) string { return ClientIP(r) }
+
+// ClientIP returns the best-effort public client address (honours X-Forwarded-For
+// only when the immediate peer is localhost, i.e. nginx → vpn-api).
+func ClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		if host == "127.0.0.1" || host == "::1" {

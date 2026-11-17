@@ -7,7 +7,7 @@
     </div>
     <div class="master-list">
       {{range .Devices}}
-      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}">
+      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}{{if $.Analytics}}?range={{$.Analytics.RangeKey}}{{end}}">
         <div class="title">
           <span>{{if .Model}}{{.Model}}{{else}}{{.Platform}}{{end}}</span>
           <span class="muted">{{.Platform}}</span>
@@ -25,9 +25,83 @@
     {{if .Device}}
     <div class="detail-head">
       <h2>{{if .Device.Model}}{{.Device.Model}}{{else}}{{.Device.Platform}}{{end}}</h2>
-      <p><code>{{.Device.ID}}</code></p>
+      <p><code>{{.Device.ID}}</code>{{if .Analytics.RouteLabel}} · {{.Analytics.RouteLabel}}{{end}}</p>
     </div>
     <div class="detail-body">
+      {{if .Analytics}}
+      <div class="range-tabs">
+        {{range .Analytics.Ranges}}
+        <a href="/admin/devices/{{$.SelectedID}}?range={{.Key}}" class="{{if eq $.Analytics.RangeKey .Key}}active{{end}}">{{.Label}}</a>
+        {{end}}
+      </div>
+      <div class="kpi-grid">
+        <div class="stat">
+          <div>
+            <p class="label">Transferred</p>
+            <p class="value">{{.Analytics.TotalHuman}}</p>
+            <p class="label" style="margin-top:.35rem">↓ {{.Analytics.TotalRXHuman}} · ↑ {{.Analytics.TotalTXHuman}}</p>
+          </div>
+        </div>
+        <div class="stat">
+          <div>
+            <p class="label">Handshakes</p>
+            <p class="value">{{.Analytics.Handshakes}}</p>
+            <p class="label" style="margin-top:.35rem">lifetime observed {{.Device.HandshakeCount}}</p>
+          </div>
+        </div>
+        <div class="stat">
+          <div>
+            <p class="label">Route</p>
+            <p class="value" style="font-size:1.15rem">{{.Analytics.RouteLabel}}</p>
+            <p class="label" style="margin-top:.35rem">{{if .Device.LastClientIP}}{{.Device.LastClientIP}}{{else}}no client IP yet{{end}}</p>
+          </div>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="card">
+          <h2>Data transfer (MiB)</h2>
+          <div class="chart-box"><canvas id="chart-transfer"></canvas></div>
+        </div>
+        <div class="card">
+          <h2>Handshakes</h2>
+          <div class="chart-box"><canvas id="chart-hs"></canvas></div>
+        </div>
+      </div>
+      <script type="application/json" id="analytics-series">{{.Analytics.SeriesJSON}}</script>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+      <script>
+      (function () {
+        var el = document.getElementById('analytics-series');
+        if (!el || !window.Chart) return;
+        var data = JSON.parse(el.textContent || '[]');
+        var labels = data.map(function (p) { return p.label; });
+        var common = {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 11 } } } },
+          scales: {
+            x: { ticks: { font: { size: 10 }, maxRotation: 0 }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(17,17,17,0.06)' } }
+          }
+        };
+        new Chart(document.getElementById('chart-transfer'), {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'RX', data: data.map(function (p) { return p.rx; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+            { label: 'TX', data: data.map(function (p) { return p.tx; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+          ]},
+          options: common
+        });
+        new Chart(document.getElementById('chart-hs'), {
+          type: 'line',
+          data: { labels: labels, datasets: [
+            { label: 'Handshakes', data: data.map(function (p) { return p.hs; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+          ]},
+          options: common
+        });
+      })();
+      </script>
+      {{end}}
+
       <div class="card">
         <h2>Device</h2>
         <div class="table-wrap">
@@ -42,6 +116,7 @@
             <tr><th>App</th><td>{{.Device.AppVersion}} (build {{.Device.AppBuild}})</td></tr>
             <tr><th>Installation ID</th><td><code>{{.Device.InstallationID}}</code></td></tr>
             <tr><th>Last seen (API)</th><td>{{.Device.LastSeen}}</td></tr>
+            <tr><th>Client IP / country</th><td>{{if .Device.LastClientIP}}<code>{{.Device.LastClientIP}}</code>{{else}}—{{end}} · {{if .Device.LastClientCountry}}{{.Device.LastClientCountry}}{{else}}?{{end}}</td></tr>
             <tr><th>Created</th><td>{{.Device.CreatedAt}}</td></tr>
             <tr><th>Updated</th><td>{{.Device.UpdatedAt}}</td></tr>
           </table>
@@ -62,6 +137,7 @@
             <tr><th>Server public key</th><td><code>{{.Device.ServerPublicKey}}</code></td></tr>
             <tr><th>Tunnel IP</th><td><code>{{.Device.TunnelIPv4}}</code></td></tr>
             <tr><th>Last handshake</th><td>{{.Device.LastHandshake}}</td></tr>
+            <tr><th>Handshake count</th><td>{{.Device.HandshakeCount}}</td></tr>
             <tr><th>RX (download to client)</th><td>{{.Device.RxHuman}} <span class="muted">({{.Device.RxBytes}} B)</span></td></tr>
             <tr><th>TX (upload from client)</th><td>{{.Device.TxHuman}} <span class="muted">({{.Device.TxBytes}} B)</span></td></tr>
             <tr><th>Total transferred</th><td>{{.Device.TotalHuman}}</td></tr>

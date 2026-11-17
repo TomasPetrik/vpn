@@ -476,6 +476,68 @@
     }
     .detail .card + .card { margin-top: .85rem; }
 
+    .range-tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+    .range-tabs a {
+      display: inline-flex;
+      align-items: center;
+      height: 1.75rem;
+      padding: 0 .7rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      background: var(--card);
+    }
+    .range-tabs a.active {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: var(--primary);
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .charts-grid .card { max-width: none; }
+    .chart-box { height: 14rem; position: relative; }
+    .ranked-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+      gap: 1rem;
+    }
+    .ranked-grid .card { max-width: none; }
+    .ranked-list { list-style: none; margin: 0; padding: 0; }
+    .ranked-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: .75rem;
+      padding: .45rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .875rem;
+    }
+    .ranked-list li:last-child { border-bottom: 0; }
+    .ranked-list .count { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .version-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .version-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .25rem .55rem;
+      border-radius: 999px;
+      background: var(--muted);
+      font-size: .75rem;
+      font-weight: 600;
+    }
+    .version-chip span { color: var(--muted-foreground); font-weight: 500; }
+
     @media (max-width: 900px) {
       .split {
         grid-template-columns: 1fr;

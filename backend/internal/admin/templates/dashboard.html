@@ -1,25 +1,147 @@
 {{template "header" .}}
-<h1>Status</h1>
-<p class="page-intro">Live overview of registered users and devices on this VPN server.</p>
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:.5rem">
+  <div>
+    <h1>Status</h1>
+    <p class="page-intro" style="margin-bottom:0">Traffic, handshakes, routes and client mix.</p>
+  </div>
+  <div class="range-tabs">
+    {{range .Analytics.Ranges}}
+    <a href="/admin?range={{.Key}}" class="{{if eq $.Analytics.RangeKey .Key}}active{{end}}">{{.Label}}</a>
+    {{end}}
+  </div>
+</div>
 
-<div class="stat-grid">
+<div class="kpi-grid">
   <div class="stat">
     <div>
-      <p class="label">Users</p>
-      <p class="value">{{.Users}}</p>
+      <p class="label">Transferred</p>
+      <p class="value">{{.Analytics.TotalHuman}}</p>
+      <p class="label" style="margin-top:.35rem">↓ {{.Analytics.TotalRXHuman}} · ↑ {{.Analytics.TotalTXHuman}}</p>
     </div>
     <div class="icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/></svg>
     </div>
   </div>
   <div class="stat">
     <div>
-      <p class="label">Devices</p>
+      <p class="label">Handshakes</p>
+      <p class="value">{{.Analytics.Handshakes}}</p>
+      <p class="label" style="margin-top:.35rem">observed in range</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 12h2"/><path d="M8 12H6a4 4 0 0 1 0-8h4"/><path d="M16 12h2a4 4 0 0 0 0-8h-4"/><path d="M8 12a4 4 0 0 0 4 4"/><path d="M16 12a4 4 0 0 1-4 4"/></svg>
+    </div>
+  </div>
+  <div class="stat">
+    <div>
+      <p class="label">Active peers</p>
+      <p class="value">{{.Analytics.ActivePeers}}</p>
+      <p class="label" style="margin-top:.35rem">handshake &lt; 3 min</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="m4.9 4.9 2.1 2.1"/><path d="m17 17 2.1 2.1"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="m4.9 19.1 2.1-2.1"/><path d="m17 7 2.1-2.1"/></svg>
+    </div>
+  </div>
+  <div class="stat">
+    <div>
+      <p class="label">Devices / users</p>
       <p class="value">{{.Devices}}</p>
+      <p class="label" style="margin-top:.35rem">{{.Users}} users</p>
     </div>
     <div class="icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
     </div>
   </div>
 </div>
+
+<div class="charts-grid">
+  <div class="card">
+    <h2>Data transfer (MiB)</h2>
+    <div class="chart-box"><canvas id="chart-transfer"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Handshakes</h2>
+    <div class="chart-box"><canvas id="chart-hs"></canvas></div>
+  </div>
+</div>
+
+<div class="ranked-grid">
+  <div class="card">
+    <h2>Routes (client → server)</h2>
+    {{if .Analytics.Routes}}
+    <ul class="ranked-list">
+      {{range .Analytics.Routes}}
+      <li><span>{{.Label}}</span><span class="count">{{.Count}}</span></li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="muted" style="margin:0">No route data yet — appears after clients hit the API with GeoIP.</p>
+    {{end}}
+  </div>
+  <div class="card">
+    <h2>Platforms</h2>
+    {{if .Analytics.Platforms}}
+    <ul class="ranked-list">
+      {{range .Analytics.Platforms}}
+      <li><span>{{.Label}}</span><span class="count">{{.Count}}</span></li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="muted" style="margin:0">No devices yet.</p>
+    {{end}}
+  </div>
+  <div class="card">
+    <h2>App versions</h2>
+    {{if .Analytics.Versions}}
+    <div class="version-chips">
+      {{range .Analytics.Versions}}
+      <div class="version-chip">{{.Label}} <span>×{{.Count}}</span></div>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="muted" style="margin:0">No version data yet.</p>
+    {{end}}
+  </div>
+</div>
+
+<script type="application/json" id="analytics-series">{{.Analytics.SeriesJSON}}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var el = document.getElementById('analytics-series');
+  if (!el || !window.Chart) return;
+  var data = JSON.parse(el.textContent || '[]');
+  var labels = data.map(function (p) { return p.label; });
+  var common = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true, labels: { boxWidth: 10, font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { font: { size: 10 }, maxRotation: 0 }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(17,17,17,0.06)' } }
+    }
+  };
+  new Chart(document.getElementById('chart-transfer'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'RX (to client)', data: data.map(function (p) { return p.rx; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: 'TX (from client)', data: data.map(function (p) { return p.tx; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+      ]
+    },
+    options: common
+  });
+  new Chart(document.getElementById('chart-hs'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Handshakes', data: data.map(function (p) { return p.hs; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+      ]
+    },
+    options: common
+  });
+})();
+</script>
 {{template "footer" .}}

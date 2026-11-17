@@ -29,6 +29,8 @@ type deviceDetailView struct {
 	ClientConfPreview                        string
 	ClientAPIJSON                            string
 	WGDriver                                 string
+	LastClientIP, LastClientCountry          string
+	HandshakeCount                           uint64
 	Panels                                   []artifactPanel
 }
 
@@ -55,8 +57,14 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	analytics, aerr := h.loadAnalytics(r, id)
+	if aerr != nil {
+		http.Error(w, aerr.Error(), 500)
+		return
+	}
+
 	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
-		"Devices": list, "SelectedID": id, "Device": d, "CSRF": csrfFrom(r),
+		"Devices": list, "SelectedID": id, "Device": d, "Analytics": analytics, "CSRF": csrfFrom(r),
 	})
 }
 
@@ -69,14 +77,17 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 		appVersion, installationID sql.NullString
 		appBuild                   sql.NullInt64
 	)
+	var lastIP, lastCountry sql.NullString
 	err := h.DB.QueryRow(`
 		SELECT id, user_id, platform, status,
 			manufacturer, model, os_version, app_version, app_build,
-			installation_id, last_seen_at, created_at, updated_at
+			installation_id, last_seen_at, last_client_ip, last_client_country,
+			created_at, updated_at
 		FROM devices WHERE id = ?`, id).Scan(
 		&d.ID, &d.UserID, &d.Platform, &d.Status,
 		&manufacturer, &model, &osVer, &appVersion, &appBuild,
-		&installationID, &lastSeen, &created, &updated,
+		&installationID, &lastSeen, &lastIP, &lastCountry,
+		&created, &updated,
 	)
 	if err != nil {
 		return d, err
@@ -86,6 +97,8 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 	d.OSVersion = nullString(osVer)
 	d.AppVersion = nullString(appVersion)
 	d.InstallationID = nullString(installationID)
+	d.LastClientIP = nullString(lastIP)
+	d.LastClientCountry = nullString(lastCountry)
 	if appBuild.Valid {
 		d.AppBuild = int(appBuild.Int64)
 	}
@@ -116,9 +129,10 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 		handshake, statsUpdated                       sql.NullTime
 		peerCreated                                   time.Time
 	)
+	var hsCount uint64
 	err = h.DB.QueryRow(`
 		SELECT p.id, p.public_key, p.tunnel_ipv4, p.rx_bytes, p.tx_bytes,
-			p.last_handshake_at, p.stats_updated_at, p.created_at,
+			p.last_handshake_at, p.handshake_count, p.stats_updated_at, p.created_at,
 			s.id, s.name, s.wg_interface, s.wg_public_key, s.tunnel_cidr
 		FROM wireguard_peers p
 		JOIN vpn_servers s ON s.id = p.server_id
@@ -126,7 +140,7 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 		ORDER BY p.updated_at DESC
 		LIMIT 1`, id).Scan(
 		&peerID, &pubKey, &tunnelIP, &rx, &tx,
-		&handshake, &statsUpdated, &peerCreated,
+		&handshake, &hsCount, &statsUpdated, &peerCreated,
 		&serverID, &serverName, &wgIface, &serverPub, &tunnelCIDR,
 	)
 	if err == nil {
@@ -134,6 +148,7 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 		d.PeerID = peerID
 		d.PeerPublicKey = pubKey
 		d.TunnelIPv4 = ipv4String(tunnelIP)
+		d.HandshakeCount = hsCount
 		d.ServerID = serverID
 		d.ServerName = serverName
 		d.WGInterface = wgIface
