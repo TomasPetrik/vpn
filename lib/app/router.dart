@@ -1,0 +1,82 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+
+import '../features/app_update/presentation/app_update_cubit.dart';
+import '../features/app_update/presentation/update_required_page.dart';
+import '../features/device/presentation/bootstrap_cubit.dart';
+import '../features/device/presentation/splash_page.dart';
+import '../features/servers/presentation/server_info_cubit.dart';
+import '../features/vpn/presentation/home_page.dart';
+
+GoRouter createRouter({
+  required AppUpdateCubit appUpdateCubit,
+  required BootstrapCubit bootstrapCubit,
+  required ServerInfoCubit serverInfoCubit,
+}) {
+  final refresh = _MultiCubitListenable([appUpdateCubit, bootstrapCubit]);
+  return GoRouter(
+    initialLocation: '/',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      final update = appUpdateCubit.state;
+      final loc = state.matchedLocation;
+      if (update is AppUpdateRequired) {
+        return loc == '/update-required' ? null : '/update-required';
+      }
+      if (loc == '/update-required') {
+        return '/';
+      }
+      if (loc == '/') {
+        final boot = bootstrapCubit.state;
+        if (boot is BootstrapRegistered || boot is BootstrapOffline) {
+          return '/home';
+        }
+      }
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const SplashPage(),
+      ),
+      GoRoute(
+        path: '/home',
+        builder: (context, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: serverInfoCubit..load()),
+            BlocProvider.value(value: appUpdateCubit),
+          ],
+          child: const HomePage(),
+        ),
+      ),
+      GoRoute(
+        path: '/update-required',
+        builder: (context, state) => BlocProvider.value(
+          value: appUpdateCubit,
+          child: const UpdateRequiredPage(),
+        ),
+      ),
+    ],
+  );
+}
+
+class _MultiCubitListenable extends ChangeNotifier {
+  _MultiCubitListenable(List<BlocBase<dynamic>> cubits) {
+    for (final cubit in cubits) {
+      _subs.add(cubit.stream.listen((_) => notifyListeners()));
+    }
+  }
+
+  final List<StreamSubscription<dynamic>> _subs = [];
+
+  @override
+  void dispose() {
+    for (final sub in _subs) {
+      sub.cancel();
+    }
+    super.dispose();
+  }
+}

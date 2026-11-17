@@ -43,3 +43,37 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets and local env (never commit)
+.env
+.env.*
+!.env.example
+**/env/*.json
+!**/env/*.example.json
+backend/deploy/env
+*.pem
+*.key
+!*.pub
+*.keystore
+*.jks
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Backend / Go
+backend/bin/
+backend/tmp/
+backend/vendor/
+backend/internal/db/sqlc/
+
+# Codegen (regenerated locally)
+**/*.g.dart
+**/*.freezed.dart
+**/injection.config.dart
+
+# Native / Rust
+native/**/target/
+**/*.xcframework/
+
+# Local tooling
+.vscode/
+.cursor/

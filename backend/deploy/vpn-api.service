@@ -1,0 +1,24 @@
+[Unit]
+Description=PetrikVPN API and admin
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vpnapi
+Group=vpnapi
+EnvironmentFile=/etc/vpn-api/env
+WorkingDirectory=/var/lib/vpn-api
+ExecStart=/opt/vpn-api/vpn-api serve
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

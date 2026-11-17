@@ -1,0 +1,18 @@
+{{template "header" .}}
+<h1>Confirm update policy</h1>
+<p>Platform: <strong>{{.Platform}}</strong></p>
+<p>Minimum build: <strong>{{.Min}}</strong></p>
+<p>Latest build: <strong>{{.Latest}}</strong></p>
+<p>This would currently block <strong>{{.Blocked}}</strong> device(s) with a known build below the minimum.</p>
+<form method="post" action="/admin/app-versions">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="platform" value="{{.Platform}}">
+  <input type="hidden" name="min_supported_build" value="{{.Min}}">
+  <input type="hidden" name="latest_build" value="{{.Latest}}">
+  <input type="hidden" name="update_url" value="{{.URL}}">
+  <input type="hidden" name="message" value="{{.Message}}">
+  <input type="hidden" name="confirm" value="1">
+  <button type="submit">Confirm and save</button>
+  <a href="/admin/app-versions">Cancel</a>
+</form>
+{{template "footer" .}}

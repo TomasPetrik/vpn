@@ -1,0 +1,2 @@
+# See live files on the VPS: /etc/apache2/sites-available/vpn.radarcut.com*.conf
+# WebSocket path is /<WSTUNNEL_PATH_PREFIX>/ -> ws://127.0.0.1:8081/<prefix>/

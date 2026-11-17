@@ -36,7 +36,7 @@ The IDs must be final before the first build reaches anyone. After that, a chang
 | `drift`, `drift_flutter` | Local cache (registration, servers, last VPN config) |
 | `freezed_annotation`, `json_annotation` | Entities, states, DTOs |
 | `get_it`, `injectable` | Dependency injection |
-| `device_info_plus`, `mobile_device_identifier` | Device recognition signals |
+| `device_info_plus`, `mobile_device_identifier` (^0.0.3; 0.1.x needs Flutter ≥3.41) | Device recognition signals |
 | `flutter_secure_storage` (addition) | Device token and installation ID; Drift is not encrypted |
 | `package_info_plus` (addition) | App version and build number (registration, force upgrade) |
 | `url_launcher` (addition) | Opens the update link from the force-upgrade page |

@@ -1,0 +1,46 @@
+{{template "header" .}}
+<h1>App versions</h1>
+<p>Builds below the minimum are force-upgraded. Builds below latest get a soft prompt.</p>
+
+<div class="card" style="margin-bottom:1.5rem">
+  <h2>android</h2>
+  <form method="post" action="/admin/app-versions">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="platform" value="android">
+    <label>Minimum supported build
+      <input name="min_supported_build" type="number" min="0" value="{{.Android.MinSupportedBuild}}" required>
+    </label>
+    <label>Latest build
+      <input name="latest_build" type="number" min="0" value="{{.Android.LatestBuild}}" required>
+    </label>
+    <label>Update URL
+      <input name="update_url" value="{{.Android.UpdateURL}}">
+    </label>
+    <label>Message
+      <textarea name="message" rows="3">{{.Android.Message}}</textarea>
+    </label>
+    <button type="submit">Review change</button>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom:1.5rem">
+  <h2>ios</h2>
+  <form method="post" action="/admin/app-versions">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="platform" value="ios">
+    <label>Minimum supported build
+      <input name="min_supported_build" type="number" min="0" value="{{.IOS.MinSupportedBuild}}" required>
+    </label>
+    <label>Latest build
+      <input name="latest_build" type="number" min="0" value="{{.IOS.LatestBuild}}" required>
+    </label>
+    <label>Update URL
+      <input name="update_url" value="{{.IOS.UpdateURL}}">
+    </label>
+    <label>Message
+      <textarea name="message" rows="3">{{.IOS.Message}}</textarea>
+    </label>
+    <button type="submit">Review change</button>
+  </form>
+</div>
+{{template "footer" .}}

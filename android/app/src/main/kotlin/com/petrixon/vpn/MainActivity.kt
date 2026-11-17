@@ -1,4 +1,4 @@
-package cz.scalesoft.ru_eu_vpn
+package com.petrixon.vpn
 
 import io.flutter.embedding.android.FlutterActivity
 

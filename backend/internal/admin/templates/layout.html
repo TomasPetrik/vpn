@@ -1,0 +1,30 @@
+{{define "header"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PetrikVPN Admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; color: #111; background: #f7f7f7; }
+    nav a { margin-right: 1rem; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { border: 1px solid #ddd; padding: .5rem .75rem; text-align: left; font-size: .9rem; }
+    th { background: #eee; }
+    .card { background: #fff; padding: 1.25rem; border: 1px solid #ddd; max-width: 28rem; }
+    .error { color: #b00020; }
+    input, button, select, textarea { font: inherit; padding: .4rem .55rem; margin: .25rem 0; width: 100%; box-sizing: border-box; }
+    button { width: auto; cursor: pointer; }
+    label { display: block; margin-top: .75rem; font-size: .85rem; }
+  </style>
+</head>
+<body>
+<nav>
+  <a href="/admin">Status</a>
+  <a href="/admin/users">Users</a>
+  <a href="/admin/devices">Devices</a>
+  <a href="/admin/app-versions">App versions</a>
+  <form method="post" action="/admin/logout" style="display:inline"><button type="submit">Logout</button></form>
+</nav>
+<hr>
+{{end}}
+{{define "footer"}}</body></html>{{end}}

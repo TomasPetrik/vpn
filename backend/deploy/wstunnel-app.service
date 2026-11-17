@@ -1,0 +1,22 @@
+[Unit]
+Description=wstunnel server for PetrikVPN app clients
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wstunnel-app
+Group=wstunnel-app
+ExecStart=/usr/local/bin/wstunnel server --restrict-config /etc/wstunnel-app/restrictions.yaml ws://127.0.0.1:8081
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/etc/wstunnel-app
+MemoryMax=256M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

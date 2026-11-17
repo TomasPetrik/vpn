@@ -215,7 +215,7 @@ ru_eu_vpn/
 
 1. ~~Paid Apple Developer Program membership~~: confirmed on 2026-11-16.
 2. ~~Approval of the ADRs~~: all approved on 2026-11-16 (0006 as direction).
-3. Approval of the [Phase 2 plan](phase2_plan.md).
+3. ~~Approval of the [Phase 2 plan](phase2_plan.md)~~: approved 2026-11-17.
 
 ## 10. Phase plan
 

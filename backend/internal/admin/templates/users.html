@@ -1,0 +1,11 @@
+{{template "header" .}}
+<h1>Users</h1>
+<table>
+  <tr><th>ID</th><th>Status</th><th>Created</th><th>Devices</th></tr>
+  {{range .Users}}
+  <tr><td>{{.ID}}</td><td>{{.Status}}</td><td>{{.Created}}</td><td>{{.Devices}}</td></tr>
+  {{else}}
+  <tr><td colspan="4">No users yet</td></tr>
+  {{end}}
+</table>
+{{template "footer" .}}

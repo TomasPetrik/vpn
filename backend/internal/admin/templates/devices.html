@@ -1,0 +1,14 @@
+{{template "header" .}}
+<h1>Devices</h1>
+<table>
+  <tr><th>ID</th><th>Platform</th><th>Model</th><th>OS</th><th>App</th><th>Build</th><th>Last seen</th></tr>
+  {{range .Devices}}
+  <tr>
+    <td>{{.ID}}</td><td>{{.Platform}}</td><td>{{.Model}}</td><td>{{.OS}}</td>
+    <td>{{.AppVersion}}</td><td>{{.Build}}</td><td>{{.LastSeen}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="7">No devices yet</td></tr>
+  {{end}}
+</table>
+{{template "footer" .}}
