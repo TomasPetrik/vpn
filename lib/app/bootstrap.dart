@@ -19,6 +19,8 @@ Future<AppBootstrap> bootstrap() async {
   await appUpdateCubit.check();
   if (appUpdateCubit.state is! AppUpdateRequired) {
     await bootstrapCubit.start();
+    // Once per app start; navigating home ↔ API log must not refetch.
+    await serverInfoCubit.load();
   }
 
   final router = createRouter(

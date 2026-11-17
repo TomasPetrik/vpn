@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/di/injection.dart';
 import '../features/app_update/presentation/app_update_cubit.dart';
 import '../features/app_update/presentation/update_required_page.dart';
 import '../features/debug/presentation/api_log_page.dart';
@@ -11,6 +12,7 @@ import '../features/device/presentation/bootstrap_cubit.dart';
 import '../features/device/presentation/splash_page.dart';
 import '../features/servers/presentation/server_info_cubit.dart';
 import '../features/vpn/presentation/home_page.dart';
+import '../features/vpn/presentation/vpn_connect_cubit.dart';
 
 GoRouter createRouter({
   required AppUpdateCubit appUpdateCubit,
@@ -50,8 +52,9 @@ GoRouter createRouter({
         path: '/home',
         builder: (context, state) => MultiBlocProvider(
           providers: [
-            BlocProvider.value(value: serverInfoCubit..load()),
+            BlocProvider.value(value: serverInfoCubit),
             BlocProvider.value(value: appUpdateCubit),
+            BlocProvider.value(value: getIt<VpnConnectCubit>()),
           ],
           child: const HomePage(),
         ),

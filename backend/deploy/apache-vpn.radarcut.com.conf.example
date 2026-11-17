@@ -1,2 +1,23 @@
-# See live files on the VPS: /etc/apache2/sites-available/vpn.radarcut.com*.conf
+# Live files on the VPS:
+#   /etc/apache2/sites-available/vpn.radarcut.com.conf          (HTTP → HTTPS only)
+#   /etc/apache2/sites-available/vpn.radarcut.com-le-ssl.conf   (TLS + reverse proxy)
+#
 # WebSocket path is /<WSTUNNEL_PATH_PREFIX>/ -> ws://127.0.0.1:8081/<prefix>/
+# Do not put ProxyPass for /admin or /api on *:80 — that allows plain-HTTP admin
+# (Chrome "Not Secure" even though the Let's Encrypt cert is valid on :443).
+
+# --- HTTP (:80) — redirect only ---
+# <VirtualHost *:80>
+#     ServerName vpn.radarcut.com
+#     RewriteEngine On
+#     RewriteRule ^/\.well-known/acme-challenge/ - [L]
+#     RewriteRule ^/(.*)$ https://vpn.radarcut.com/$1 [R=301,L]
+# </VirtualHost>
+
+# --- HTTPS (:443) essentials ---
+# RequestHeader set X-Forwarded-Proto "https"
+# RequestHeader set X-Forwarded-Port "443"
+# Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+# ProxyPass /api/ http://127.0.0.1:8090/api/
+# ProxyPass /admin http://127.0.0.1:8090/admin
+# ProxyPass /healthz http://127.0.0.1:8090/healthz

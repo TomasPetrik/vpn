@@ -26,7 +26,11 @@ class ServerInfoCubit extends Cubit<ServerInfoState> {
 
   final ServersRepository _repository;
 
-  Future<void> load() async {
+  /// Loads servers once. Pass [force] to refresh explicitly.
+  Future<void> load({bool force = false}) async {
+    if (!force && state is ServerInfoLoaded) {
+      return;
+    }
     emit(const ServerInfoLoading());
     try {
       final servers = await _repository.list();

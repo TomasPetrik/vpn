@@ -37,21 +37,23 @@ func (h *Handler) LoginSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "session error", 500)
 		return
 	}
+	secure := isHTTPS(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "__Host-vpn_admin",
 		Value:    cookie,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   true, // __Host- requires Secure
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int((12 * time.Hour).Seconds()),
 	})
-	// For local HTTP dev Secure cookies won't stick; also set a non-Host fallback.
+	// Non-Host fallback for local HTTP; Secure whenever the request is HTTPS.
 	http.SetCookie(w, &http.Cookie{
 		Name:     "vpn_admin",
 		Value:    cookie,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int((12 * time.Hour).Seconds()),
 	})
@@ -198,6 +200,13 @@ func readSessionCookie(r *http.Request) string {
 		return c.Value
 	}
 	return ""
+}
+
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 func httpapiClientIP(r *http.Request) string {
