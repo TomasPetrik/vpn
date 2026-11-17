@@ -1,0 +1,40 @@
+{{template "header" .}}
+<p><a href="/admin/database">← All tables</a></p>
+<h1>Table: {{.Table}}</h1>
+<p>{{.Total}} row(s). Showing {{.Limit}} from offset {{.Offset}}.</p>
+
+<h2>Columns</h2>
+<table>
+  <tr><th>Name</th><th>Type</th><th>Null</th><th>Key</th><th>Default</th><th>Extra</th><th>Comment</th></tr>
+  {{range .Columns}}
+  <tr>
+    <td>{{.Name}}</td>
+    <td>{{.Type}}</td>
+    <td>{{.Nullable}}</td>
+    <td>{{.Key}}</td>
+    <td>{{.Default}}</td>
+    <td>{{.Extra}}</td>
+    <td>{{.Comment}}</td>
+  </tr>
+  {{end}}
+</table>
+
+<h2>Data preview</h2>
+<div style="overflow-x:auto">
+<table>
+  <tr>
+    {{range .ColNames}}<th>{{.}}</th>{{end}}
+  </tr>
+  {{range .Rows}}
+  <tr>
+    {{range .}}<td><code>{{.}}</code></td>{{end}}
+  </tr>
+  {{else}}
+  <tr><td colspan="99">No rows</td></tr>
+  {{end}}
+</table>
+</div>
+{{if .HasMore}}
+<p><a href="/admin/database/{{.Table}}?offset={{.Next}}&limit={{.Limit}}">Next page →</a></p>
+{{end}}
+{{template "footer" .}}

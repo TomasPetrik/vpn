@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/app_update/presentation/app_update_cubit.dart';
 import '../features/app_update/presentation/update_required_page.dart';
+import '../features/debug/presentation/api_log_page.dart';
 import '../features/device/presentation/bootstrap_cubit.dart';
 import '../features/device/presentation/splash_page.dart';
 import '../features/servers/presentation/server_info_cubit.dart';
@@ -28,6 +29,9 @@ GoRouter createRouter({
       }
       if (loc == '/update-required') {
         return '/';
+      }
+      if (loc == '/debug/api-log') {
+        return null;
       }
       if (loc == '/') {
         final boot = bootstrapCubit.state;
@@ -58,6 +62,10 @@ GoRouter createRouter({
           value: appUpdateCubit,
           child: const UpdateRequiredPage(),
         ),
+      ),
+      GoRoute(
+        path: '/debug/api-log',
+        builder: (context, state) => const ApiLogPage(),
       ),
     ],
   );

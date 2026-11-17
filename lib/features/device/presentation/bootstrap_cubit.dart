@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
+import '../domain/device_session.dart';
 
 sealed class BootstrapState {
   const BootstrapState();
@@ -16,8 +17,9 @@ class BootstrapRegistering extends BootstrapState {
 }
 
 class BootstrapRegistered extends BootstrapState {
-  const BootstrapRegistered(this.registration);
+  const BootstrapRegistered(this.registration, {this.session});
   final DeviceRegistration registration;
+  final DeviceSession? session;
 }
 
 class BootstrapOffline extends BootstrapState {
@@ -34,7 +36,13 @@ class BootstrapCubit extends Cubit<BootstrapState> {
     emit(const BootstrapRegistering());
     try {
       final registration = await _repository.register();
-      emit(BootstrapRegistered(registration));
+      DeviceSession? session;
+      try {
+        session = await _repository.me();
+      } catch (_) {
+        // Registration succeeded; /me is best-effort for Phase 2.
+      }
+      emit(BootstrapRegistered(registration, session: session));
     } catch (e) {
       emit(BootstrapOffline(e.toString()));
     }

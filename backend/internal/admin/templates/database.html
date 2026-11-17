@@ -1,0 +1,17 @@
+{{template "header" .}}
+<h1>Database</h1>
+<p>Schema: <strong>{{.DBName}}</strong> (read-only preview)</p>
+<table>
+  <tr><th>Table</th><th>Rows</th><th>Engine</th><th>Comment</th></tr>
+  {{range .Tables}}
+  <tr>
+    <td><a href="/admin/database/{{.Name}}">{{.Name}}</a></td>
+    <td>{{.Rows}}</td>
+    <td>{{.Engine}}</td>
+    <td>{{.Comment}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="4">No tables</td></tr>
+  {{end}}
+</table>
+{{template "footer" .}}

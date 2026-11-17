@@ -1,9 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/storage/secure_store.dart';
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
+import '../domain/device_session.dart';
+import '../domain/vpn_peer_config.dart';
 import 'device_api.dart';
 import 'device_info_source.dart';
 
@@ -56,5 +59,30 @@ class DeviceRepositoryImpl implements DeviceRepository {
       deviceId: '${data['device_id']}',
       created: data['created'] == true,
     );
+  }
+
+  @override
+  Future<DeviceSession> me() async {
+    final data = await api.me();
+    return DeviceSession.fromJson(data);
+  }
+
+  @override
+  Future<VpnPeerConfig> upsertPeer({required String publicKey}) async {
+    final data = await api.upsertPeer(publicKey: publicKey);
+    return VpnPeerConfig.fromJson(data);
+  }
+
+  @override
+  Future<VpnPeerConfig?> getPeer() async {
+    try {
+      final data = await api.getPeer();
+      return VpnPeerConfig.fromJson(data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
   }
 }

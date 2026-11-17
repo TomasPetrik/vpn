@@ -49,6 +49,7 @@ app.*.map.json
 .env.*
 !.env.example
 **/env/*.json
+!**/env/*.json.example
 !**/env/*.example.json
 backend/deploy/env
 *.pem

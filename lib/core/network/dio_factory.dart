@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../config/app_config.dart';
 import '../storage/secure_store.dart';
 import 'api_failure.dart';
+import 'api_traffic_log.dart';
 
 typedef UpdateRequiredCallback = void Function(AppUpdateRequiredFailure failure);
 
@@ -14,6 +15,7 @@ class DioFactory {
     required PackageInfo packageInfo,
     required SecureStore secureStore,
     UpdateRequiredCallback? onUpdateRequired,
+    ApiTrafficLog? trafficLog,
   }) {
     final dio = Dio(
       BaseOptions(
@@ -37,9 +39,47 @@ class DioFactory {
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
+
+          if (trafficLog != null) {
+            final headers = <String, String>{};
+            options.headers.forEach((key, value) {
+              if (value != null) {
+                headers[key.toString()] = value.toString();
+              }
+            });
+            final entry = trafficLog.start(
+              method: options.method,
+              uri: options.uri,
+              requestHeaders: headers,
+              requestBody: options.data,
+            );
+            options.extra['api_traffic_entry'] = entry;
+          }
+
           handler.next(options);
         },
+        onResponse: (response, handler) {
+          final entry = response.requestOptions.extra['api_traffic_entry'];
+          if (entry is ApiCallEntry && trafficLog != null) {
+            trafficLog.complete(
+              entry,
+              statusCode: response.statusCode,
+              responseBody: response.data,
+            );
+          }
+          handler.next(response);
+        },
         onError: (error, handler) {
+          final entry = error.requestOptions.extra['api_traffic_entry'];
+          if (entry is ApiCallEntry && trafficLog != null) {
+            trafficLog.complete(
+              entry,
+              statusCode: error.response?.statusCode,
+              responseBody: error.response?.data,
+              errorMessage: error.message,
+            );
+          }
+
           final response = error.response;
           if (response?.statusCode == 426) {
             final data = response?.data;

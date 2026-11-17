@@ -18,6 +18,7 @@ import (
 	"github.com/TomasPetrik/vpn/backend/internal/db"
 	"github.com/TomasPetrik/vpn/backend/internal/device"
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
+	"github.com/TomasPetrik/vpn/backend/internal/peer"
 	"github.com/TomasPetrik/vpn/backend/internal/serverinfo"
 )
 
@@ -128,8 +129,14 @@ func runServe(log *slog.Logger) error {
 	updateSvc := appupdate.New(sqlDB)
 	updateH := &appupdate.Handler{Service: updateSvc}
 	serverH := &serverinfo.Handler{Cfg: &cfg, DB: sqlDB}
+	peerSvc := &peer.Service{DB: sqlDB, Cfg: &cfg}
+	peerH := &peer.Handler{Service: peerSvc}
 	adminStore := &admin.Store{DB: sqlDB}
 	adminH := &admin.Handler{Store: adminStore, DB: sqlDB, Updates: updateSvc, Tmpl: tmpl}
+
+	if err := peerSvc.EnsureServer(context.Background()); err != nil {
+		return fmt.Errorf("seed vpn server: %w", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +150,8 @@ func runServe(log *slog.Logger) error {
 	auth := device.AuthMiddleware(deviceSvc)
 	mux.Handle("GET /api/v1/me", auth(http.HandlerFunc(deviceH.Me)))
 	mux.Handle("GET /api/v1/servers", auth(http.HandlerFunc(serverH.List)))
+	mux.Handle("PUT /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Upsert)))
+	mux.Handle("GET /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Get)))
 
 	loginLimit := httpapi.NewIPRateLimiter(10, time.Minute)
 	mux.Handle("GET /admin/login", http.HandlerFunc(adminH.LoginForm))
@@ -153,6 +162,8 @@ func runServe(log *slog.Logger) error {
 	mux.Handle("GET /admin/devices", adminH.RequireAuth(http.HandlerFunc(adminH.Devices)))
 	mux.Handle("GET /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsGet)))
 	mux.Handle("POST /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsPost)))
+	mux.Handle("GET /admin/database", adminH.RequireAuth(http.HandlerFunc(adminH.DatabaseIndex)))
+	mux.Handle("GET /admin/database/{table}", adminH.RequireAuth(http.HandlerFunc(adminH.DatabaseTable)))
 
 	var handler http.Handler = mux
 	handler = appupdate.Middleware(updateSvc)(handler)

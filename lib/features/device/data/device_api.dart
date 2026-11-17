@@ -17,4 +17,19 @@ class DeviceApi {
     final response = await _dio.get<Map<String, dynamic>>('/api/v1/me');
     return response.data ?? {};
   }
+
+  Future<Map<String, dynamic>> upsertPeer({required String publicKey}) async {
+    final response = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/devices/me/peer',
+      data: {'public_key': publicKey},
+    );
+    return response.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> getPeer() async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/devices/me/peer',
+    );
+    return response.data ?? {};
+  }
 }
