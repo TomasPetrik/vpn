@@ -39,6 +39,8 @@ notify = { version = "8.2.0", features = [] }
 httparse = { version = "1.10.1", features = [] }
 
 rustls-native-certs = { version = "0.8.3", features = [] }
+# Mozilla CA set — needed on iOS Network Extension where rustls-native-certs is often empty.
+webpki-roots = "0.26"
 rustls-pemfile = { version = "2.2.0", features = [] }
 x509-parser = "0.18.0"
 serde = { version = "1.0.228", features = ["derive"] }

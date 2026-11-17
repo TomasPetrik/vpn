@@ -132,8 +132,8 @@ fn build_client(cfg: &FfiConfig) -> anyhow::Result<Client> {
         tls_sni_override: Some(sni),
         tls_sni_disable: false,
         tls_ech_enable: false,
-        // Default false: iOS PacketTunnel trust store via rustls-native-certs is often empty.
-        tls_verify_certificate: cfg.tls_verify_certificate.unwrap_or(false),
+        // Default true: vendored wstunnel loads webpki-roots so NE trust works.
+        tls_verify_certificate: cfg.tls_verify_certificate.unwrap_or(true),
         http_proxy: None,
         http_proxy_login: None,
         http_proxy_password: None,

@@ -185,9 +185,8 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
       "remote": remote,
       "local_udp": localTransportEndpoint,
       "url": url,
-      // iOS NE often has an empty rustls native trust store; LE verify fails otherwise.
-      // TODO: ship webpki-roots (or Security.framework verifier) and re-enable.
-      "tls_verify_certificate": false,
+      // Vendored wstunnel embeds webpki-roots (Mozilla CAs) for NE trust.
+      "tls_verify_certificate": true,
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [])
     guard let s = String(data: data, encoding: .utf8) else {

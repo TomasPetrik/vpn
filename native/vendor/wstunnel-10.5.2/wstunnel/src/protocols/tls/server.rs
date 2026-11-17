@@ -125,6 +125,17 @@ pub fn tls_connector(
         }
     }
 
+    // Always add Mozilla roots. iOS Packet Tunnel / Network Extension often
+    // exposes an empty system trust store to rustls-native-certs, which would
+    // otherwise make tls_verify_certificate=true fail for every server.
+    let before = root_store.len();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    info!(
+        "TLS root store: {} system + webpki-roots → {} total",
+        before,
+        root_store.len()
+    );
+
     let crypto_provider = ClientConfig::builder().crypto_provider().clone();
     let config_builder = ClientConfig::builder_with_provider(crypto_provider);
     let config_builder = if let Some(ech_config) = ech_config {

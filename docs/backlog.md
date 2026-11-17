@@ -11,7 +11,7 @@ Last updated: 2026-11-17
 
 ## Open
 
-1. **TLS verify on iOS** — currently `tls_verify_certificate: false` because rustls-native-certs often has an empty trust store inside the Network Extension. Need proper verification (e.g. webpki-roots or Security.framework).
+1. ~~**TLS verify on iOS**~~ — webpki-roots in vendored wstunnel; `tls_verify_certificate: true` (device verify: prod connect OK + bad SNI fails).
 2. **PacketTunnel memory** — formal measurement under load vs ~50 MB jetsam budget (Instruments / on-device).
 3. **Android** — VpnService + wireguard-go + wstunnel client (binary or FFI); end-to-end same as iOS.
 4. **Stability tests** — Wi‑Fi ↔ cellular handoff, 30+ min idle, reconnect after sleep; document results.
@@ -20,5 +20,4 @@ Last updated: 2026-11-17
 ## Nice-to-have
 
 - Surface last handshake / transfer in the app Connect UI
-- Re-enable TLS verify behind a config flag once fixed
 - Sim slice for WstunnelFFI XCFramework (device-only today)
