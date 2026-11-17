@@ -65,6 +65,28 @@ func (n *Netlink) RemovePeer(publicKey string) error {
 	return nil
 }
 
+func (n *Netlink) PeerStats() ([]PeerStat, error) {
+	dev, err := n.client.Device(n.iface)
+	if err != nil {
+		return nil, fmt.Errorf("device %s: %w", n.iface, err)
+	}
+	out := make([]PeerStat, 0, len(dev.Peers))
+	for _, p := range dev.Peers {
+		st := PeerStat{
+			PublicKey: p.PublicKey.String(),
+			// Map kernel → admin (client) direction.
+			RxBytes: uint64(p.TransmitBytes),
+			TxBytes: uint64(p.ReceiveBytes),
+		}
+		if !p.LastHandshakeTime.IsZero() {
+			st.LastHandshake = p.LastHandshakeTime.UTC()
+			st.HasHandshake = true
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
 func parseKey(publicKey string) (wgtypes.Key, error) {
 	raw, err := base64.StdEncoding.DecodeString(publicKey)
 	if err != nil {

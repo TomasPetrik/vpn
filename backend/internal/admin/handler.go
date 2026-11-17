@@ -10,6 +10,7 @@ import (
 
 	"github.com/TomasPetrik/vpn/backend/internal/appupdate"
 	"github.com/TomasPetrik/vpn/backend/internal/config"
+	"github.com/TomasPetrik/vpn/backend/internal/peer"
 )
 
 type Handler struct {
@@ -18,6 +19,7 @@ type Handler struct {
 	Updates *appupdate.Service
 	Tmpl    *template.Template
 	Cfg     *config.Config
+	Peers   *peer.Service
 }
 
 func (h *Handler) LoginForm(w http.ResponseWriter, r *http.Request) {

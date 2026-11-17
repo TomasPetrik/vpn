@@ -135,7 +135,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       emit(
         state.copyWith(
           phase: VpnConnectPhase.skeletonConnected,
-          stepLabel: 'WireGuard started (awaiting wstunnel)',
+          stepLabel: 'Connected (WireGuard + wstunnel)',
           log: List.unmodifiable(lines),
           clearError: true,
         ),
@@ -204,10 +204,13 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       }
 
       emitPhase(VpnConnectPhase.startingTransport, 'Starting transport…');
-      log('wstunnel — skipped (step 5); WG endpoint = 127.0.0.1:51820');
+      log(
+        'wstunnel — in PacketTunnel; WG endpoint = 127.0.0.1:51820 → '
+        '${peer.transport.url}/${peer.transport.pathPrefix}',
+      );
 
       emitPhase(VpnConnectPhase.startingTunnel, 'Starting WireGuard…');
-      log('vpn_engine.startTunnel — WireGuardKit');
+      log('vpn_engine.startTunnel — wstunnel + WireGuardKit');
       final tunnelConfig = <String, Object?>{
         'addresses': peer.interfaceAddresses,
         'dns': peer.dns,
@@ -217,6 +220,10 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         'excluded_ips': peer.excludedIps,
         'persistent_keepalive': peer.persistentKeepalive,
         'server_ips': peer.transport.serverIps,
+        'path_prefix': peer.transport.pathPrefix,
+        'remote': peer.transport.remote,
+        'transport_url': peer.transport.url,
+        'url': peer.transport.url,
         'peer_id': peer.peerId,
       };
       final started = await _vpnEngine.startTunnel(tunnelConfig);
@@ -241,7 +248,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
           emit(
             state.copyWith(
               phase: VpnConnectPhase.skeletonConnected,
-              stepLabel: 'WireGuard started (awaiting wstunnel)',
+              stepLabel: 'Connected (WireGuard + wstunnel)',
               log: List.unmodifiable(lines),
               peer: peer,
               clearError: true,

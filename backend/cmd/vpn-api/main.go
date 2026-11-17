@@ -137,10 +137,19 @@ func runServe(log *slog.Logger) error {
 	peerSvc := &peer.Service{DB: sqlDB, Cfg: &cfg, WG: wgDriver}
 	peerH := &peer.Handler{Service: peerSvc}
 	adminStore := &admin.Store{DB: sqlDB}
-	adminH := &admin.Handler{Store: adminStore, DB: sqlDB, Updates: updateSvc, Tmpl: tmpl, Cfg: &cfg}
+	adminH := &admin.Handler{Store: adminStore, DB: sqlDB, Updates: updateSvc, Tmpl: tmpl, Cfg: &cfg, Peers: peerSvc}
 
 	if err := peerSvc.EnsureServer(context.Background()); err != nil {
 		return fmt.Errorf("seed vpn server: %w", err)
+	}
+
+	statsCtx, statsCancel := context.WithCancel(context.Background())
+	defer statsCancel()
+	peerSvc.StartStatsLoop(statsCtx, log, 15*time.Second)
+	if n, err := peerSvc.SyncStats(context.Background()); err != nil {
+		log.Warn("initial peer stats sync", "err", err)
+	} else {
+		log.Info("initial peer stats sync", "peers", n)
 	}
 
 	mux := http.NewServeMux()

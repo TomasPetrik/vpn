@@ -82,3 +82,9 @@ ios/ThirdParty/
 
 # Xcode derived cache droppings
 ios/[0-9]*/
+
+# Rust FFI
+native/wstunnel_ffi/target/
+
+# Upstream wstunnel demo mTLS material (not needed to build FFI)
+native/vendor/wstunnel-10.5.2/certs/

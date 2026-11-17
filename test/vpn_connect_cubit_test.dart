@@ -67,24 +67,28 @@ void main() {
       (_) async => const VpnStatusSnapshot(
         status: 'connected',
         extensionStatus: 'wireguard_started',
-        extensionLog: ['WireGuard started (awaiting wstunnel)'],
+        extensionLog: ['WireGuard started (wstunnel on 127.0.0.1:51820)'],
       ),
     );
     when(() => engine.statusStream()).thenAnswer((_) => const Stream.empty());
   });
 
   blocTest<VpnConnectCubit, VpnConnectState>(
-    'connect starts WireGuardKit and reaches skeletonConnected',
+    'connect starts wstunnel+WireGuardKit and reaches skeletonConnected',
     build: () => VpnConnectCubit(deviceRepository: repo, vpnEngine: engine),
     act: (cubit) => cubit.connect(),
     wait: const Duration(milliseconds: 500),
     verify: (cubit) {
       verify(() => engine.getPublicKey()).called(1);
       verify(() => engine.prepare()).called(1);
-      verify(() => engine.startTunnel(any())).called(1);
+      final captured = verify(() => engine.startTunnel(captureAny())).captured;
+      final cfg = captured.single as Map<String, Object?>;
+      expect(cfg['path_prefix'], 'prefix');
+      expect(cfg['remote'], '127.0.0.1:51821');
+      expect(cfg['server_ips'], ['72.61.158.103']);
       expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
       expect(cubit.state.peer?.peerId, 'peer-1');
-      expect(cubit.state.stepLabel, contains('WireGuard'));
+      expect(cubit.state.stepLabel, contains('Connected'));
     },
   );
 

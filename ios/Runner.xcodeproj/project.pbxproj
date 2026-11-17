@@ -19,6 +19,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A1B2C3D4E5F60718293A4B5C /* VpnEngineChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* VpnEngineChannel.swift */; };
 		BDB01FA80A7D1AED7F40AEAB /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 82747A6F6BECEA8E08A28C88 /* Pods_Runner.framework */; };
+		C1D4F84A9C409810C4631392 /* WstunnelFFI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A37F9ADC5A2F3FCDB766F920 /* WstunnelFFI.xcframework */; };
 		C2CAA6489D50A84D967D8A91 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3165E44FF74F8BEED20F28FE /* Foundation.framework */; };
 		FEC40408253C450D886BB87B /* WireGuardKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1C132D0520D73C1F2D68A19D /* WireGuardKit */; };
 /* End PBXBuildFile section */
@@ -97,6 +98,7 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9ADE62E4B2435F9F2E2C07C8 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* VpnEngineChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VpnEngineChannel.swift; sourceTree = "<group>"; };
+		A37F9ADC5A2F3FCDB766F920 /* WstunnelFFI.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; name = WstunnelFFI.xcframework; path = ThirdParty/WstunnelFFI/WstunnelFFI.xcframework; sourceTree = "<group>"; };
 		A8AA2ADA519FA2E95FD31A2B /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		E0CF511FF6E24E66CC01542A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E6D45847798055275D02E30F /* PacketTunnel.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = PacketTunnel.entitlements; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 			files = (
 				C2CAA6489D50A84D967D8A91 /* Foundation.framework in Frameworks */,
 				FEC40408253C450D886BB87B /* WireGuardKit in Frameworks */,
+				C1D4F84A9C409810C4631392 /* WstunnelFFI.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,6 +188,7 @@
 				406DCB97639280622DFF08DE /* Pods */,
 				0F70C604E3A0AE838E0BA2F9 /* Frameworks */,
 				CD3C75DD3C0910CCE6F4E035 /* PacketTunnel */,
+				A37F9ADC5A2F3FCDB766F920 /* WstunnelFFI.xcframework */,
 			);
 			sourceTree = "<group>";
 		};
@@ -866,6 +870,10 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 56S59F5D36;
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -874,12 +882,27 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+				);
 				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lwstunnel_ffi",
+					"-lc++",
+					"-framework",
+					Security,
+					"-framework",
+					SystemConfiguration,
+				);
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -894,6 +917,10 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 56S59F5D36;
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -902,12 +929,27 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+				);
 				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lwstunnel_ffi",
+					"-lc++",
+					"-framework",
+					Security,
+					"-framework",
+					SystemConfiguration,
+				);
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -930,6 +972,10 @@
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 56S59F5D36;
 				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -938,12 +984,27 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+				);
 				MARKETING_VERSION = 1.0.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lwstunnel_ffi",
+					"-lc++",
+					"-framework",
+					Security,
+					"-framework",
+					SystemConfiguration,
+				);
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;

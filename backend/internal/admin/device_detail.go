@@ -83,6 +83,13 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 	if h.Cfg != nil {
 		d.WGDriver = h.Cfg.WGDriver
 	}
+	// Refresh counters from kernel before rendering so admin sees live traffic.
+	if h.Peers != nil {
+		if _, syncErr := h.Peers.SyncStats(r.Context()); syncErr != nil {
+			// Non-fatal: page still renders last DB values.
+			_ = syncErr
+		}
+	}
 
 	var (
 		peerID, pubKey, serverID, serverName, wgIface string
@@ -124,7 +131,7 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		if handshake.Valid {
 			d.LastHandshake = handshake.Time.UTC().Format(time.RFC3339)
 		} else {
-			d.LastHandshake = "never (tunnel not active yet / step 4 pending)"
+			d.LastHandshake = "never"
 		}
 		if statsUpdated.Valid {
 			d.StatsUpdated = statsUpdated.Time.UTC().Format(time.RFC3339)
