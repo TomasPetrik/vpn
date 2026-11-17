@@ -20,6 +20,7 @@ import (
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
 	"github.com/TomasPetrik/vpn/backend/internal/peer"
 	"github.com/TomasPetrik/vpn/backend/internal/serverinfo"
+	wgpkg "github.com/TomasPetrik/vpn/backend/internal/wg"
 )
 
 func main() {
@@ -129,10 +130,14 @@ func runServe(log *slog.Logger) error {
 	updateSvc := appupdate.New(sqlDB)
 	updateH := &appupdate.Handler{Service: updateSvc}
 	serverH := &serverinfo.Handler{Cfg: &cfg, DB: sqlDB}
-	peerSvc := &peer.Service{DB: sqlDB, Cfg: &cfg}
+	wgDriver, err := wgpkg.New(cfg.WGDriver, cfg.WGInterface)
+	if err != nil {
+		return fmt.Errorf("wireguard driver: %w", err)
+	}
+	peerSvc := &peer.Service{DB: sqlDB, Cfg: &cfg, WG: wgDriver}
 	peerH := &peer.Handler{Service: peerSvc}
 	adminStore := &admin.Store{DB: sqlDB}
-	adminH := &admin.Handler{Store: adminStore, DB: sqlDB, Updates: updateSvc, Tmpl: tmpl}
+	adminH := &admin.Handler{Store: adminStore, DB: sqlDB, Updates: updateSvc, Tmpl: tmpl, Cfg: &cfg}
 
 	if err := peerSvc.EnsureServer(context.Background()); err != nil {
 		return fmt.Errorf("seed vpn server: %w", err)

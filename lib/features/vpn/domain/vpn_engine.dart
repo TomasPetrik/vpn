@@ -74,8 +74,8 @@ abstract class VpnEngine {
   /// Requests OS VPN permission / installs tunnel preferences.
   Future<VpnPrepareResult> prepare();
 
-  /// Starts the PacketTunnel provider (skeleton in step 3).
-  Future<VpnTunnelResult> startTunnel();
+  /// Starts the PacketTunnel provider with the provisioned peer config.
+  Future<VpnTunnelResult> startTunnel(Map<String, Object?> tunnelConfig);
 
   /// Stops the PacketTunnel provider.
   Future<VpnTunnelResult> stopTunnel();

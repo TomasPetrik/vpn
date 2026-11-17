@@ -18,6 +18,9 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
   private let statusChannel: FlutterEventChannel
   private var eventSink: FlutterEventSink?
   private var statusObserver: NSObjectProtocol?
+  private var cachedManager: NETunnelProviderManager?
+  private var emitWorkItem: DispatchWorkItem?
+  private var lastEmittedStatus: String?
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(name: Self.channelName, binaryMessenger: messenger)
@@ -25,24 +28,16 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
     super.init()
     channel.setMethodCallHandler(handle)
     statusChannel.setStreamHandler(self)
-    statusObserver = NotificationCenter.default.addObserver(
-      forName: .NEVPNStatusDidChange,
-      object: nil,
-      queue: .main
-    ) { [weak self] _ in
-      self?.emitStatus()
-    }
   }
 
   deinit {
-    if let statusObserver {
-      NotificationCenter.default.removeObserver(statusObserver)
-    }
+    detachStatusObserver()
+    emitWorkItem?.cancel()
   }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
     eventSink = events
-    emitStatus()
+    scheduleEmitStatus(forceLoad: true)
     return nil
   }
 
@@ -61,13 +56,14 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
         result(FlutterError(code: "key_error", message: error.localizedDescription, details: nil))
       }
     case "prepare":
-      Self.prepareVpn { payload in result(payload) }
+      prepareVpn { payload in result(payload) }
     case "startTunnel":
-      Self.startTunnel { payload in result(payload) }
+      let args = call.arguments as? [String: Any] ?? [:]
+      startTunnel(config: args) { payload in result(payload) }
     case "stopTunnel":
-      Self.stopTunnel { payload in result(payload) }
+      stopTunnel { payload in result(payload) }
     case "getStatus":
-      Self.currentStatusPayload { payload in result(payload) }
+      currentStatusPayload(forceLoad: false) { payload in result(payload) }
     case "extensionLog":
       result(["lines": Self.extensionLogLines()])
     default:
@@ -75,9 +71,53 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
     }
   }
 
-  private func emitStatus() {
-    Self.currentStatusPayload { [weak self] payload in
-      self?.eventSink?(payload)
+  // MARK: - Status observation
+
+  private func attachStatusObserver(to connection: NEVPNConnection) {
+    detachStatusObserver()
+    statusObserver = NotificationCenter.default.addObserver(
+      forName: .NEVPNStatusDidChange,
+      object: connection,
+      queue: .main
+    ) { [weak self] notification in
+      guard let self else { return }
+      let connection = notification.object as? NEVPNConnection
+      self.scheduleEmitStatus(connection: connection, forceLoad: false)
+    }
+  }
+
+  private func detachStatusObserver() {
+    if let statusObserver {
+      NotificationCenter.default.removeObserver(statusObserver)
+      self.statusObserver = nil
+    }
+  }
+
+  /// Debounced status emit. Avoids `loadAllFromPreferences` on every NE callback
+  /// (that storms `ne_session queue` and trips EXC_RESOURCE under the debugger).
+  private func scheduleEmitStatus(
+    connection: NEVPNConnection? = nil,
+    forceLoad: Bool = false
+  ) {
+    emitWorkItem?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      self?.emitStatusNow(connection: connection, forceLoad: forceLoad)
+    }
+    emitWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+  }
+
+  private func emitStatusNow(connection: NEVPNConnection?, forceLoad: Bool) {
+    currentStatusPayload(connection: connection, forceLoad: forceLoad) { [weak self] payload in
+      guard let self, let sink = self.eventSink else { return }
+      let status = payload["status"] as? String ?? ""
+      let extensionStatus = payload["extension_status"] as? String ?? ""
+      let key = "\(status)|\(extensionStatus)"
+      if key == self.lastEmittedStatus {
+        return
+      }
+      self.lastEmittedStatus = key
+      sink(payload)
     }
   }
 
@@ -145,13 +185,13 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
 
   // MARK: - VPN manager
 
-  private static func prepareVpn(completion: @escaping ([String: Any]) -> Void) {
-    loadOrCreateManager { manager, error in
+  private func prepareVpn(completion: @escaping ([String: Any]) -> Void) {
+    loadOrCreateManager { [weak self] manager, error in
       if let error {
         completion(["granted": false, "status": "error", "message": error.localizedDescription])
         return
       }
-      guard let manager else {
+      guard let self, let manager else {
         completion(["granted": false, "status": "error", "message": "No VPN manager"])
         return
       }
@@ -170,19 +210,27 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
             completion(["granted": false, "status": "error", "message": loadError.localizedDescription])
             return
           }
+          self.cachedManager = manager
+          self.attachStatusObserver(to: manager.connection)
           completion(["granted": true, "status": "ready", "message": "VPN configuration saved"])
         }
       }
     }
   }
 
-  private static func startTunnel(completion: @escaping ([String: Any]) -> Void) {
-    loadOrCreateManager { manager, error in
+  private func startTunnel(config: [String: Any], completion: @escaping ([String: Any]) -> Void) {
+    do {
+      try Self.storeTunnelConfig(config)
+    } catch {
+      completion(["ok": false, "status": "error", "message": error.localizedDescription])
+      return
+    }
+    loadOrCreateManager { [weak self] manager, error in
       if let error {
         completion(["ok": false, "status": "error", "message": error.localizedDescription])
         return
       }
-      guard let manager else {
+      guard let self, let manager else {
         completion(["ok": false, "status": "error", "message": "No VPN manager"])
         return
       }
@@ -197,14 +245,16 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
             completion(["ok": false, "status": "error", "message": loadError.localizedDescription])
             return
           }
+          self.cachedManager = manager
+          self.attachStatusObserver(to: manager.connection)
           do {
             try manager.connection.startVPNTunnel(options: [
-              "step": "skeleton" as NSString,
+              "step": "wireguard" as NSString,
             ])
             completion([
               "ok": true,
-              "status": statusString(manager.connection.status),
-              "message": "startVPNTunnel requested",
+              "status": Self.statusString(manager.connection.status),
+              "message": "startVPNTunnel requested (WireGuardKit)",
             ])
           } catch {
             completion(["ok": false, "status": "error", "message": error.localizedDescription])
@@ -214,52 +264,111 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
     }
   }
 
-  private static func stopTunnel(completion: @escaping ([String: Any]) -> Void) {
-    NETunnelProviderManager.loadAllFromPreferences { managers, error in
-      if let error {
-        completion(["ok": false, "message": error.localizedDescription])
-        return
-      }
-      guard let manager = managers?.first else {
+  private static func storeTunnelConfig(_ config: [String: Any]) throws {
+    guard JSONSerialization.isValidJSONObject(config) else {
+      throw NSError(domain: "VpnEngine", code: 1, userInfo: [
+        NSLocalizedDescriptionKey: "tunnel config is not valid JSON",
+      ])
+    }
+    let data = try JSONSerialization.data(withJSONObject: config, options: [])
+    guard let defaults = UserDefaults(suiteName: appGroupId) else {
+      throw NSError(domain: "VpnEngine", code: 2, userInfo: [
+        NSLocalizedDescriptionKey: "App Group UserDefaults unavailable",
+      ])
+    }
+    defaults.set(data, forKey: "tunnel_config")
+    defaults.synchronize()
+  }
+
+  private func stopTunnel(completion: @escaping ([String: Any]) -> Void) {
+    let finish: (NETunnelProviderManager?) -> Void = { manager in
+      guard let manager else {
         completion(["ok": true, "message": "No VPN manager to stop"])
         return
       }
       manager.connection.stopVPNTunnel()
       completion(["ok": true, "message": "stopVPNTunnel requested"])
     }
+
+    if let cachedManager {
+      finish(cachedManager)
+      return
+    }
+    NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+      if let error {
+        completion(["ok": false, "message": error.localizedDescription])
+        return
+      }
+      let manager = managers?.first
+      self?.cachedManager = manager
+      if let manager {
+        self?.attachStatusObserver(to: manager.connection)
+      }
+      finish(manager)
+    }
   }
 
-  private static func loadOrCreateManager(completion: @escaping (NETunnelProviderManager?, Error?) -> Void) {
-    NETunnelProviderManager.loadAllFromPreferences { managers, error in
+  private func loadOrCreateManager(completion: @escaping (NETunnelProviderManager?, Error?) -> Void) {
+    if let cachedManager {
+      applyProtocol(to: cachedManager)
+      completion(cachedManager, nil)
+      return
+    }
+    NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
       if let error {
         completion(nil, error)
         return
       }
       let manager = managers?.first ?? NETunnelProviderManager()
-      let proto = NETunnelProviderProtocol()
-      proto.providerBundleIdentifier = providerBundleId
-      proto.serverAddress = "vpn.radarcut.com"
-      manager.protocolConfiguration = proto
-      manager.localizedDescription = "PetrikVPN"
+      self?.applyProtocol(to: manager)
+      self?.cachedManager = manager
       completion(manager, nil)
     }
   }
 
-  private static func currentStatusPayload(completion: @escaping ([String: Any]) -> Void) {
-    NETunnelProviderManager.loadAllFromPreferences { managers, _ in
-      let vpnStatus: String
-      if let manager = managers?.first {
-        vpnStatus = statusString(manager.connection.status)
-      } else {
-        vpnStatus = "disconnected"
-      }
-      let defaults = UserDefaults(suiteName: appGroupId)
+  private func applyProtocol(to manager: NETunnelProviderManager) {
+    let proto = NETunnelProviderProtocol()
+    proto.providerBundleIdentifier = Self.providerBundleId
+    proto.serverAddress = "vpn.radarcut.com"
+    manager.protocolConfiguration = proto
+    manager.localizedDescription = "PetrikVPN"
+  }
+
+  private func currentStatusPayload(
+    connection: NEVPNConnection? = nil,
+    forceLoad: Bool,
+    completion: @escaping ([String: Any]) -> Void
+  ) {
+    let finish: (String) -> Void = { vpnStatus in
+      let defaults = UserDefaults(suiteName: Self.appGroupId)
       let extensionStatus = defaults?.string(forKey: "tunnel_status") ?? ""
       completion([
         "status": vpnStatus,
         "extension_status": extensionStatus,
-        "extension_log": extensionLogLines(),
+        "extension_log": Self.extensionLogLines(),
       ])
+    }
+
+    if let connection {
+      finish(Self.statusString(connection.status))
+      return
+    }
+    if let cachedManager {
+      finish(Self.statusString(cachedManager.connection.status))
+      return
+    }
+    guard forceLoad else {
+      finish("disconnected")
+      return
+    }
+    NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
+      if let manager = managers?.first {
+        self?.cachedManager = manager
+        self?.attachStatusObserver(to: manager.connection)
+        finish(Self.statusString(manager.connection.status))
+      } else {
+        finish("disconnected")
+      }
     }
   }
 

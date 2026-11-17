@@ -78,3 +78,7 @@ native/**/target/
 # Local tooling
 .vscode/
 .cursor/
+ios/ThirdParty/
+
+# Xcode derived cache droppings
+ios/[0-9]*/

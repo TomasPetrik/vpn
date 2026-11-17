@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/TomasPetrik/vpn/backend/internal/appupdate"
+	"github.com/TomasPetrik/vpn/backend/internal/config"
 )
 
 type Handler struct {
@@ -16,6 +17,7 @@ type Handler struct {
 	DB      *sql.DB
 	Updates *appupdate.Service
 	Tmpl    *template.Template
+	Cfg     *config.Config
 }
 
 func (h *Handler) LoginForm(w http.ResponseWriter, r *http.Request) {

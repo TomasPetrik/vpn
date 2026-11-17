@@ -51,7 +51,7 @@ class MethodChannelVpnEngine implements VpnEngine {
   }
 
   @override
-  Future<VpnTunnelResult> startTunnel() async {
+  Future<VpnTunnelResult> startTunnel(Map<String, Object?> tunnelConfig) async {
     if (!_isIos) {
       return const VpnTunnelResult(
         ok: false,
@@ -59,8 +59,10 @@ class MethodChannelVpnEngine implements VpnEngine {
         message: 'startTunnel() is iOS-only for now',
       );
     }
-    final result =
-        await _channel.invokeMethod<Map<Object?, Object?>>('startTunnel');
+    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+      'startTunnel',
+      tunnelConfig,
+    );
     if (result == null) {
       return const VpnTunnelResult(
         ok: false,

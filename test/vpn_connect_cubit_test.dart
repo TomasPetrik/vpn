@@ -13,6 +13,10 @@ class _MockDeviceRepository extends Mock implements DeviceRepository {}
 class _MockVpnEngine extends Mock implements VpnEngine {}
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(<String, Object?>{});
+  });
+
   late _MockDeviceRepository repo;
   late _MockVpnEngine engine;
 
@@ -52,34 +56,35 @@ void main() {
         message: 'ok',
       ),
     );
-    when(() => engine.startTunnel()).thenAnswer(
+    when(() => engine.startTunnel(any())).thenAnswer(
       (_) async => const VpnTunnelResult(
         ok: true,
         status: 'connecting',
-        message: 'startVPNTunnel requested',
+        message: 'startVPNTunnel requested (WireGuardKit)',
       ),
     );
     when(() => engine.getStatus()).thenAnswer(
       (_) async => const VpnStatusSnapshot(
         status: 'connected',
-        extensionStatus: 'skeleton_connected',
-        extensionLog: ['PacketTunnel skeleton connected'],
+        extensionStatus: 'wireguard_started',
+        extensionLog: ['WireGuard started (awaiting wstunnel)'],
       ),
     );
     when(() => engine.statusStream()).thenAnswer((_) => const Stream.empty());
   });
 
   blocTest<VpnConnectCubit, VpnConnectState>(
-    'connect starts PacketTunnel skeleton and reaches skeletonConnected',
+    'connect starts WireGuardKit and reaches skeletonConnected',
     build: () => VpnConnectCubit(deviceRepository: repo, vpnEngine: engine),
     act: (cubit) => cubit.connect(),
     wait: const Duration(milliseconds: 500),
     verify: (cubit) {
       verify(() => engine.getPublicKey()).called(1);
       verify(() => engine.prepare()).called(1);
-      verify(() => engine.startTunnel()).called(1);
+      verify(() => engine.startTunnel(any())).called(1);
       expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
       expect(cubit.state.peer?.peerId, 'peer-1');
+      expect(cubit.state.stepLabel, contains('WireGuard'));
     },
   );
 

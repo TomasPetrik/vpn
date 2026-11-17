@@ -109,27 +109,33 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     return super.close();
   }
 
+  String? _lastStatusKey;
+
   void _onStatus(VpnStatusSnapshot snap) {
     if (state.phase != VpnConnectPhase.startingTunnel &&
         state.phase != VpnConnectPhase.skeletonConnected) {
       return;
     }
+    final key = '${snap.status}|${snap.extensionStatus}';
+    if (key == _lastStatusKey) {
+      return;
+    }
+    _lastStatusKey = key;
+
     final lines = List<VpnConnectLogLine>.from(state.log);
     void log(String message) {
       lines.add(VpnConnectLogLine(at: DateTime.now(), message: message));
     }
 
     log('VPN status → ${snap.status} (extension: ${snap.extensionStatus})');
-    for (final line in snap.extensionLog.takeLast(3)) {
-      log('ext: $line');
-    }
 
     if (snap.status == 'connected' ||
+        snap.extensionStatus == 'wireguard_started' ||
         snap.extensionStatus == 'skeleton_connected') {
       emit(
         state.copyWith(
           phase: VpnConnectPhase.skeletonConnected,
-          stepLabel: 'PacketTunnel skeleton connected (no WireGuard yet)',
+          stepLabel: 'WireGuard started (awaiting wstunnel)',
           log: List.unmodifiable(lines),
           clearError: true,
         ),
@@ -152,6 +158,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     if (state.isBusy) {
       return;
     }
+    _lastStatusKey = null;
 
     final lines = <VpnConnectLogLine>[];
     void log(String message) {
@@ -197,24 +204,36 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       }
 
       emitPhase(VpnConnectPhase.startingTransport, 'Starting transport…');
-      log('wstunnel — skipped (step 5)');
+      log('wstunnel — skipped (step 5); WG endpoint = 127.0.0.1:51820');
 
-      emitPhase(VpnConnectPhase.startingTunnel, 'Starting PacketTunnel…');
-      log('vpn_engine.startTunnel — PacketTunnel skeleton');
-      final started = await _vpnEngine.startTunnel();
+      emitPhase(VpnConnectPhase.startingTunnel, 'Starting WireGuard…');
+      log('vpn_engine.startTunnel — WireGuardKit');
+      final tunnelConfig = <String, Object?>{
+        'addresses': peer.interfaceAddresses,
+        'dns': peer.dns,
+        'mtu': peer.mtu,
+        'server_public_key': peer.peerPublicKey,
+        'allowed_ips': peer.allowedIps,
+        'excluded_ips': peer.excludedIps,
+        'persistent_keepalive': peer.persistentKeepalive,
+        'server_ips': peer.transport.serverIps,
+        'peer_id': peer.peerId,
+      };
+      final started = await _vpnEngine.startTunnel(tunnelConfig);
       log('startTunnel → ${started.status}: ${started.message}');
       if (!started.ok) {
         throw StateError('startTunnel failed: ${started.message}');
       }
 
       // Poll briefly for extension status / connected.
-      for (var i = 0; i < 10; i++) {
+      for (var i = 0; i < 12; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
         final snap = await _vpnEngine.getStatus();
         log(
           'poll status=${snap.status} ext=${snap.extensionStatus}',
         );
         if (snap.status == 'connected' ||
+            snap.extensionStatus == 'wireguard_started' ||
             snap.extensionStatus == 'skeleton_connected') {
           for (final line in snap.extensionLog) {
             log('ext: $line');
@@ -222,7 +241,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
           emit(
             state.copyWith(
               phase: VpnConnectPhase.skeletonConnected,
-              stepLabel: 'PacketTunnel skeleton connected (no WireGuard yet)',
+              stepLabel: 'WireGuard started (awaiting wstunnel)',
               log: List.unmodifiable(lines),
               peer: peer,
               clearError: true,
@@ -238,7 +257,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       emit(
         state.copyWith(
           phase: VpnConnectPhase.skeletonConnected,
-          stepLabel: 'Tunnel start requested — check OS VPN / logs',
+          stepLabel: 'WireGuard start requested — check OS VPN / logs',
           log: List.unmodifiable(lines),
           peer: peer,
           clearError: true,
@@ -293,15 +312,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     if (state.canDisconnect) {
       await disconnect();
     }
+    _lastStatusKey = null;
     emit(VpnConnectState.initial());
-  }
-}
-
-extension _TakeLast<E> on List<E> {
-  Iterable<E> takeLast(int n) {
-    if (length <= n) {
-      return this;
-    }
-    return sublist(length - n);
   }
 }

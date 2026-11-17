@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/config/app_config.dart';
@@ -123,7 +124,7 @@ class HomePage extends StatelessWidget {
                     child: Text(
                       connect.phase == VpnConnectPhase.skeletonConnected ||
                               connect.phase == VpnConnectPhase.error
-                          ? 'Retry connect'
+                          ? 'Retry'
                           : 'Connect',
                     ),
                   ),
@@ -144,40 +145,7 @@ class HomePage extends StatelessWidget {
                   ],
                   if (isDevMode && connect.log.isNotEmpty) ...[
                     const SizedBox(height: 24),
-                    Text(
-                      'Connect log',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).dividerColor,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 220),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          shrinkWrap: true,
-                          itemCount: connect.log.length,
-                          itemBuilder: (context, index) {
-                            final line = connect.log[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                '${_formatTime(line.at)}  ${line.message}',
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 11,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
+                    _ConnectLogPanel(log: connect.log),
                   ],
                 ],
               );
@@ -187,10 +155,72 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
+}
 
-  static String _formatTime(DateTime value) {
+class _ConnectLogPanel extends StatelessWidget {
+  const _ConnectLogPanel({required this.log});
+
+  final List<VpnConnectLogLine> log;
+
+  static String formatTime(DateTime value) {
     final local = value.toLocal();
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+
+  String get _plainText => log
+      .map((line) => '${formatTime(line.at)}  ${line.message}')
+      .join('\n');
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: _plainText));
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Connect log copied')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Connect log',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _copy(context),
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text('Copy all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).dividerColor),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SelectableText(
+              _plainText,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

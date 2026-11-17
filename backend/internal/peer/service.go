@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/TomasPetrik/vpn/backend/internal/config"
+	"github.com/TomasPetrik/vpn/backend/internal/wg"
 	"github.com/google/uuid"
 )
 
@@ -20,6 +21,7 @@ var ErrInvalidKey = errors.New("invalid_public_key")
 type Service struct {
 	DB  *sql.DB
 	Cfg *config.Config
+	WG  wg.Driver
 }
 
 type ConfigResponse struct {
@@ -112,6 +114,13 @@ func (s *Service) Upsert(ctx context.Context, deviceID, publicKey string) (Confi
 
 	if err := tx.Commit(); err != nil {
 		return ConfigResponse{}, err
+	}
+
+	if s.WG != nil {
+		ip := net.IPv4(byte(tunnelIP>>24), byte(tunnelIP>>16), byte(tunnelIP>>8), byte(tunnelIP))
+		if err := s.WG.UpsertPeer(key, ip); err != nil {
+			return ConfigResponse{}, fmt.Errorf("apply wireguard peer: %w", err)
+		}
 	}
 	return s.buildConfig(peerID, tunnelIP), nil
 }
