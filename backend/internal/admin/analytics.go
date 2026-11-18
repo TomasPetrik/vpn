@@ -3,18 +3,16 @@ package admin
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
-	"strings"
 	"time"
+
+	"github.com/TomasPetrik/vpn/backend/internal/usage"
 )
 
 type analyticsRange struct {
 	Key   string
 	Label string
-	Since time.Time
-	Hourly bool
 }
 
 type seriesPoint struct {
@@ -49,88 +47,37 @@ type analyticsView struct {
 	RouteLabel    string
 }
 
-func parseAnalyticsRange(r *http.Request) analyticsRange {
-	key := r.URL.Query().Get("range")
-	now := time.Now().UTC()
-	switch key {
-	case "24h":
-		return analyticsRange{Key: "24h", Label: "Last 24 hours", Since: now.Add(-24 * time.Hour), Hourly: true}
-	case "30d":
-		return analyticsRange{Key: "30d", Label: "Last 30 days", Since: now.Add(-30 * 24 * time.Hour), Hourly: false}
-	default:
-		return analyticsRange{Key: "7d", Label: "Last 7 days", Since: now.Add(-7 * 24 * time.Hour), Hourly: false}
-	}
-}
-
 func (h *Handler) loadAnalytics(r *http.Request, deviceID string) (analyticsView, error) {
-	ar := parseAnalyticsRange(r)
+	rangeKey := r.URL.Query().Get("range")
+	series, err := usage.Load(r.Context(), h.DB, deviceID, rangeKey, time.Now().UTC())
+	if err != nil {
+		return analyticsView{}, err
+	}
 	v := analyticsView{
-		RangeKey: ar.Key,
+		RangeKey: series.Range,
 		Ranges: []analyticsRange{
 			{Key: "24h", Label: "24h"},
 			{Key: "7d", Label: "7d"},
 			{Key: "30d", Label: "30d"},
 		},
+		TotalRX:      series.TotalRxBytes,
+		TotalTX:      series.TotalTxBytes,
+		Handshakes:   series.TotalHandshakes,
+		TotalRXHuman: humanBytes(series.TotalRxBytes),
+		TotalTXHuman: humanBytes(series.TotalTxBytes),
+		TotalHuman:   humanBytes(series.TotalRxBytes + series.TotalTxBytes),
 	}
 
-	peerFilter := ""
-	args := []any{ar.Since}
-	if deviceID != "" {
-		peerFilter = " AND p.device_id = ?"
-		args = append(args, deviceID)
-	}
-
-	q := fmt.Sprintf(`
-		SELECT COALESCE(SUM(s.rx_delta),0), COALESCE(SUM(s.tx_delta),0), COALESCE(SUM(s.handshake_delta),0)
-		FROM peer_stats_samples s
-		JOIN wireguard_peers p ON p.id = s.peer_id
-		WHERE s.sampled_at >= ?%s`, peerFilter)
-	if err := h.DB.QueryRow(q, args...).Scan(&v.TotalRX, &v.TotalTX, &v.Handshakes); err != nil {
-		return v, err
-	}
-	v.TotalRXHuman = humanBytes(v.TotalRX)
-	v.TotalTXHuman = humanBytes(v.TotalTX)
-	v.TotalHuman = humanBytes(v.TotalRX + v.TotalTX)
-
-	bucket := "DATE(s.sampled_at)"
-	labelFmt := "%Y-%m-%d"
-	if ar.Hourly {
-		bucket = "DATE_FORMAT(s.sampled_at, '%Y-%m-%d %H:00')"
-		labelFmt = "%Y-%m-%d %H:00"
-	}
-	_ = labelFmt
-	seriesQ := fmt.Sprintf(`
-		SELECT CAST(%s AS CHAR) AS bucket,
-			COALESCE(SUM(s.rx_delta),0), COALESCE(SUM(s.tx_delta),0), COALESCE(SUM(s.handshake_delta),0)
-		FROM peer_stats_samples s
-		JOIN wireguard_peers p ON p.id = s.peer_id
-		WHERE s.sampled_at >= ?%s
-		GROUP BY bucket
-		ORDER BY bucket`, bucket, peerFilter)
-	rows, err := h.DB.Query(seriesQ, args...)
-	if err != nil {
-		return v, err
-	}
-	defer rows.Close()
-	var series []seriesPoint
-	for rows.Next() {
-		var label string
-		var rx, tx uint64
-		var hs int64
-		if err := rows.Scan(&label, &rx, &tx, &hs); err != nil {
-			return v, err
-		}
-		series = append(series, seriesPoint{
-			Label: shortLabel(label, ar.Hourly),
-			RX:    float64(rx) / (1024 * 1024), // MiB for chart
-			TX:    float64(tx) / (1024 * 1024),
-			HS:    hs,
+	chart := make([]seriesPoint, 0, len(series.Points))
+	for _, p := range series.Points {
+		chart = append(chart, seriesPoint{
+			Label: p.Label,
+			RX:    float64(p.RxBytes) / (1024 * 1024), // MiB for chart
+			TX:    float64(p.TxBytes) / (1024 * 1024),
+			HS:    p.HandshakeDelta,
 		})
 	}
-	if series == nil {
-		series = []seriesPoint{}
-	}
-	b, _ := json.Marshal(series)
+	b, _ := json.Marshal(chart)
 	v.SeriesJSON = template.JS(b)
 
 	activeQ := `
@@ -210,22 +157,6 @@ func (h *Handler) rankedQuery(q string, args ...any) ([]rankedItem, error) {
 		out = append(out, it)
 	}
 	return out, rows.Err()
-}
-
-func shortLabel(label string, hourly bool) string {
-	label = strings.TrimSpace(label)
-	if hourly {
-		// "2026-11-17 14:00" → "14:00"
-		if len(label) >= 16 {
-			return label[11:16]
-		}
-		return label
-	}
-	// "2026-11-17" → "11-17"
-	if len(label) >= 10 {
-		return label[5:10]
-	}
-	return label
 }
 
 func nullStrOr(ns sql.NullString, fallback string) string {

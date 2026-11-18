@@ -2,16 +2,20 @@ package device
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
+	"github.com/TomasPetrik/vpn/backend/internal/usage"
 )
 
 type Handler struct {
 	Service *Service
+	DB      *sql.DB
 }
 
 type registerBody struct {
@@ -93,6 +97,27 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"user_id":   u,
 		"device_id": d,
 	})
+}
+
+// Usage returns zero-filled transfer buckets for the authenticated device.
+// Query: range=24h|7d|30d|all (default 7d).
+func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
+	deviceID, ok := r.Context().Value(httpapi.CtxDeviceID).(string)
+	if !ok || deviceID == "" {
+		httpapi.WriteError(w, http.StatusUnauthorized, "invalid_token", "unauthorized")
+		return
+	}
+	if h.DB == nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal", "database unavailable")
+		return
+	}
+	rangeKey := r.URL.Query().Get("range")
+	series, err := usage.Load(r.Context(), h.DB, deviceID, rangeKey, time.Now().UTC())
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal", "usage query failed")
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusOK, series)
 }
 
 func AuthMiddleware(svc *Service) func(http.Handler) http.Handler {

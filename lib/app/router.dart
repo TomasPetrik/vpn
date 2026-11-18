@@ -5,7 +5,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/di/injection.dart';
-import '../features/account/presentation/account_page.dart';
 import '../features/app_update/presentation/app_update_cubit.dart';
 import '../features/app_update/presentation/update_required_page.dart';
 import '../features/debug/presentation/api_log_page.dart';
@@ -79,14 +78,6 @@ GoRouter createRouter({
                   value: getIt<VpnConnectCubit>(),
                   child: const VpnStatsPage(),
                 ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/account',
-                builder: (context, state) => const AccountPage(),
               ),
             ],
           ),

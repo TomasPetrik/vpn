@@ -3,9 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/di/injection.dart';
 import '../../../core/theme/cyber_shield_colors.dart';
 import '../../../core/theme/cyber_shield_theme.dart';
+import '../../device/domain/device_repository.dart';
 import '../../device/domain/vpn_peer_config.dart';
+import '../domain/usage_series.dart';
 import 'home/country_flag.dart';
 import 'vpn_connect_cubit.dart';
 import 'vpn_stats_format.dart';
@@ -21,11 +24,49 @@ class VpnStatsPage extends StatefulWidget {
 
 class _VpnStatsPageState extends State<VpnStatsPage> {
   _StatsPeriod _period = _StatsPeriod.days7;
+  late UsageSeries _usage = UsageSeries.scaffold(range: '7d');
+  bool _usageLoading = false;
 
   @override
   void initState() {
     super.initState();
     context.read<VpnConnectCubit>().refreshCommittedTotals();
+    _loadUsage();
+  }
+
+  String get _apiRange => switch (_period) {
+        _StatsPeriod.today => '24h',
+        _StatsPeriod.days7 => '7d',
+        _StatsPeriod.days30 => '30d',
+        _StatsPeriod.all => 'all',
+      };
+
+  Future<void> _loadUsage() async {
+    final range = _apiRange;
+    setState(() {
+      _usageLoading = true;
+      // Keep a drawable line visible while refreshing.
+      if (_usage.points.isEmpty) {
+        _usage = UsageSeries.scaffold(range: range);
+      }
+    });
+    try {
+      final series = await getIt<DeviceRepository>().usageSeries(range: range);
+      if (!mounted) return;
+      setState(() {
+        _usage = series.points.isEmpty
+            ? UsageSeries.scaffold(range: range)
+            : series;
+        _usageLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Never surface Retry — keep zero-filled line chart for the period.
+      setState(() {
+        _usage = UsageSeries.scaffold(range: range);
+        _usageLoading = false;
+      });
+    }
   }
 
   @override
@@ -82,9 +123,12 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                               ),
                               child: IconButton(
                                 tooltip: 'Refresh totals',
-                                onPressed: () => context
-                                    .read<VpnConnectCubit>()
-                                    .refreshCommittedTotals(),
+                                onPressed: () {
+                                  context
+                                      .read<VpnConnectCubit>()
+                                      .refreshCommittedTotals();
+                                  _loadUsage();
+                                },
                                 icon: const Icon(Icons.refresh, size: 20),
                                 color: CyberShieldColors.onSurfaceVariant,
                               ),
@@ -92,11 +136,14 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _PeriodSelector(
-                          period: _period,
-                          onChanged: (value) =>
-                              setState(() => _period = value),
-                        ),
+                _PeriodSelector(
+                  period: _period,
+                  onChanged: (value) {
+                    if (value == _period) return;
+                    setState(() => _period = value);
+                    _loadUsage();
+                  },
+                ),
                       ],
                     ),
                   ),
@@ -183,9 +230,9 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                       ),
                       const SizedBox(height: 16),
                       _BandwidthPulseCard(
-                        rxBytes: overall.rxBytes,
-                        txBytes: overall.txBytes,
                         period: _period,
+                        series: _usage,
+                        loading: _usageLoading,
                       ),
                       const SizedBox(height: 16),
                       _SessionLedger(
@@ -462,21 +509,20 @@ class _TrafficShareCard extends StatelessWidget {
 
 class _BandwidthPulseCard extends StatelessWidget {
   const _BandwidthPulseCard({
-    required this.rxBytes,
-    required this.txBytes,
     required this.period,
+    required this.series,
+    required this.loading,
   });
 
-  final int rxBytes;
-  final int txBytes;
   final _StatsPeriod period;
+  final UsageSeries series;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
-    final labels = switch (period) {
-      _StatsPeriod.today => const ['0h', '4h', '8h', '12h', '16h', '20h', 'Now'],
-      _ => const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    };
+    final points = series.points;
+    final peakIndex = _peakIndex(points);
+    final total = series.totalBytes;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -499,7 +545,9 @@ class _BandwidthPulseCard extends StatelessWidget {
                       style: CyberShieldTheme.headlineSm(),
                     ),
                     Text(
-                      'Data encrypted end-to-end',
+                      period == _StatsPeriod.today
+                          ? 'Hourly usage from server'
+                          : 'Daily usage from server',
                       style: CyberShieldTheme.bodySm(),
                     ),
                   ],
@@ -543,49 +591,144 @@ class _BandwidthPulseCard extends StatelessWidget {
           SizedBox(
             height: 160,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _PulseChartPainter(
-                hasData: rxBytes + txBytes > 0,
-                rxRatio: rxBytes == 0 && txBytes == 0
-                    ? 0.5
-                    : rxBytes / math.max(1, rxBytes + txBytes),
-              ),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _PulseChartPainter(
+                      rxValues: [
+                        for (final p in points) p.rxBytes.toDouble(),
+                      ],
+                      txValues: [
+                        for (final p in points) p.txBytes.toDouble(),
+                      ],
+                      highlightIndex: peakIndex,
+                    ),
+                  ),
+                ),
+                if (loading)
+                  const Align(
+                    alignment: Alignment.topRight,
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              for (var i = 0; i < labels.length; i++)
-                Text(
-                  labels[i],
-                  style: CyberShieldTheme.labelCode(
-                    color: i == 3
-                        ? CyberShieldColors.secondaryContainer
-                        : CyberShieldColors.onSurfaceVariant,
-                    weight: i == 3 ? FontWeight.w700 : FontWeight.w500,
+          if (points.isNotEmpty)
+            Row(
+              children: [
+                for (var i = 0; i < points.length; i++)
+                  Expanded(
+                    child: Text(
+                      _axisLabel(
+                        point: points[i],
+                        index: i,
+                        count: points.length,
+                        period: period,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: CyberShieldTheme.labelCode(
+                        color: i == peakIndex
+                            ? CyberShieldColors.secondaryContainer
+                            : CyberShieldColors.onSurfaceVariant,
+                        weight: i == peakIndex
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ).copyWith(fontSize: period == _StatsPeriod.today ? 9 : 10),
+                    ),
                   ),
-                ),
-            ],
-          ),
-          if (rxBytes + txBytes > 0) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Total ${VpnStatsFormat.bytes(rxBytes + txBytes)} in selected window',
-              style: CyberShieldTheme.bodySm(),
+              ],
             ),
-          ],
+          const SizedBox(height: 8),
+          Text(
+            total > 0
+                ? 'Total ${VpnStatsFormat.bytes(total)} in selected window'
+                : 'No tunnel traffic in this window yet',
+            style: CyberShieldTheme.bodySm(),
+          ),
         ],
       ),
     );
   }
+
+  static int _peakIndex(List<UsagePoint> points) {
+    if (points.isEmpty) return -1;
+    var best = 0;
+    for (var i = 1; i < points.length; i++) {
+      if (points[i].totalBytes > points[best].totalBytes) {
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /// Today → hour ticks (0h, 3h, …). 30d/All → calendar day. 7d → weekday.
+  static String _axisLabel({
+    required UsagePoint point,
+    required int index,
+    required int count,
+    required _StatsPeriod period,
+  }) {
+    switch (period) {
+      case _StatsPeriod.today:
+        // Show every 3 hours so 24 slots stay readable.
+        if (index % 3 != 0 && index != count - 1) {
+          return '';
+        }
+        return '${_hourOf(point)}h';
+      case _StatsPeriod.days30:
+      case _StatsPeriod.all:
+        // Show ~8 day markers across the window.
+        final step = (count / 8).ceil().clamp(1, count);
+        if (index % step != 0 && index != count - 1) {
+          return '';
+        }
+        return _dayOf(point);
+      case _StatsPeriod.days7:
+        return point.label.isNotEmpty ? point.label : _dayOf(point);
+    }
+  }
+
+  static String _hourOf(UsagePoint point) {
+    final fromLabel = RegExp(r'^(\d{1,2})').firstMatch(point.label);
+    if (fromLabel != null) {
+      return int.parse(fromLabel.group(1)!).toString();
+    }
+    final fromDate = RegExp(r'(\d{2}):\d{2}').firstMatch(point.date);
+    if (fromDate != null) {
+      return int.parse(fromDate.group(1)!).toString();
+    }
+    return point.label;
+  }
+
+  static String _dayOf(UsagePoint point) {
+    final match = RegExp(r'(\d{4})-(\d{2})-(\d{2})').firstMatch(point.date);
+    if (match != null) {
+      final month = int.parse(match.group(2)!);
+      final day = int.parse(match.group(3)!);
+      return '$day/$month';
+    }
+    return point.label;
+  }
 }
 
 class _PulseChartPainter extends CustomPainter {
-  _PulseChartPainter({required this.hasData, required this.rxRatio});
+  _PulseChartPainter({
+    required this.rxValues,
+    required this.txValues,
+    required this.highlightIndex,
+  });
 
-  final bool hasData;
-  final double rxRatio;
+  final List<double> rxValues;
+  final List<double> txValues;
+  final int highlightIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -597,7 +740,7 @@ class _PulseChartPainter extends CustomPainter {
       _dashLine(canvas, Offset(0, y), Offset(size.width, y), grid);
     }
 
-    if (!hasData) {
+    if (rxValues.isEmpty || txValues.isEmpty) {
       final idle = Paint()
         ..color = CyberShieldColors.outlineVariant
         ..strokeWidth = 1.5
@@ -607,37 +750,48 @@ class _PulseChartPainter extends CustomPainter {
       return;
     }
 
-    final downPoints = _curve(size, amplitude: 0.55 + rxRatio * 0.25, phase: 0);
-    final upPoints = _curve(size, amplitude: 0.25 + (1 - rxRatio) * 0.2, phase: 0.35);
+    var maxValue = 0.0;
+    for (final v in rxValues) {
+      maxValue = math.max(maxValue, v);
+    }
+    for (final v in txValues) {
+      maxValue = math.max(maxValue, v);
+    }
+    // All-zero windows still draw flat baseline lines (never blank / retry).
+    final scale = maxValue <= 0 ? 1.0 : maxValue;
+    final downPoints = _seriesPoints(size, rxValues, scale);
+    final upPoints = _seriesPoints(size, txValues, scale);
 
     _fillCurve(canvas, size, upPoints, CyberShieldColors.primary, 0.15);
     _strokeCurve(canvas, upPoints, CyberShieldColors.primary, 1.75);
     _fillCurve(canvas, size, downPoints, CyberShieldColors.secondaryContainer, 0.35);
     _strokeCurve(canvas, downPoints, CyberShieldColors.secondaryContainer, 2.25);
 
-    final peak = downPoints[downPoints.length ~/ 2];
-    canvas.drawCircle(
-      peak,
-      4.5,
-      Paint()..color = CyberShieldColors.secondaryContainer,
-    );
-    canvas.drawCircle(
-      peak,
-      4.5,
-      Paint()
-        ..color = CyberShieldColors.surfaceContainerLowest
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    if (highlightIndex >= 0 && highlightIndex < downPoints.length) {
+      final peak = downPoints[highlightIndex];
+      canvas.drawCircle(
+        peak,
+        4.5,
+        Paint()..color = CyberShieldColors.secondaryContainer,
+      );
+      canvas.drawCircle(
+        peak,
+        4.5,
+        Paint()
+          ..color = CyberShieldColors.surfaceContainerLowest
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
   }
 
-  List<Offset> _curve(Size size, {required double amplitude, required double phase}) {
+  List<Offset> _seriesPoints(Size size, List<double> values, double maxValue) {
     final points = <Offset>[];
-    const steps = 6;
-    for (var i = 0; i <= steps; i++) {
-      final t = i / steps;
-      final wave = math.sin((t + phase) * math.pi * 1.6);
-      final y = size.height * (0.82 - amplitude * (0.45 + 0.55 * ((wave + 1) / 2)));
+    final n = values.length;
+    for (var i = 0; i < n; i++) {
+      final t = n == 1 ? 0.0 : i / (n - 1);
+      final norm = (values[i] / maxValue).clamp(0.0, 1.0);
+      final y = size.height * (0.88 - 0.7 * norm);
       points.add(Offset(size.width * t, y));
     }
     return points;
@@ -712,7 +866,18 @@ class _PulseChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PulseChartPainter oldDelegate) =>
-      oldDelegate.hasData != hasData || oldDelegate.rxRatio != rxRatio;
+      oldDelegate.highlightIndex != highlightIndex ||
+      !_listEquals(oldDelegate.rxValues, rxValues) ||
+      !_listEquals(oldDelegate.txValues, txValues);
+
+  static bool _listEquals(List<double> a, List<double> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }
 
 class _SessionLedger extends StatelessWidget {

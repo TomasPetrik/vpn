@@ -81,7 +81,7 @@ func (s *Service) SyncStats(ctx context.Context) (int, error) {
 
 	_, _ = s.DB.ExecContext(ctx, `
 		DELETE FROM peer_stats_samples
-		WHERE sampled_at < UTC_TIMESTAMP(6) - INTERVAL 30 DAY`)
+		WHERE sampled_at < UTC_TIMESTAMP(6) - INTERVAL 365 DAY`)
 
 	return updated, nil
 }

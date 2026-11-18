@@ -32,4 +32,12 @@ class DeviceApi {
     );
     return response.data ?? {};
   }
+
+  Future<Map<String, dynamic>> usage({required String range}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/devices/me/usage',
+      queryParameters: {'range': range},
+    );
+    return response.data ?? {};
+  }
 }

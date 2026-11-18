@@ -3,6 +3,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/storage/secure_store.dart';
+import '../../vpn/domain/usage_series.dart';
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
 import '../domain/device_session.dart';
@@ -112,5 +113,12 @@ class DeviceRepositoryImpl implements DeviceRepository {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<UsageSeries> usageSeries({required String range}) async {
+    await ensureSession();
+    final data = await api.usage(range: range);
+    return UsageSeries.fromJson(data);
   }
 }

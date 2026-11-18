@@ -1,3 +1,4 @@
+import '../../vpn/domain/usage_series.dart';
 import 'device_registration.dart';
 import 'device_session.dart';
 import 'vpn_peer_config.dart';
@@ -13,4 +14,7 @@ abstract class DeviceRepository {
   Future<VpnPeerConfig> upsertPeer({required String publicKey});
 
   Future<VpnPeerConfig?> getPeer();
+
+  /// Backend peer_stats daily/hourly buckets for this device.
+  Future<UsageSeries> usageSeries({required String range});
 }

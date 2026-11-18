@@ -133,7 +133,7 @@ func runServe(log *slog.Logger) error {
 		DB: sqlDB, HMACKey: cfg.DeviceIDHMACKey,
 		CountryOf: geoLookup.Country,
 	}
-	deviceH := &device.Handler{Service: deviceSvc}
+	deviceH := &device.Handler{Service: deviceSvc, DB: sqlDB}
 	updateSvc := appupdate.New(sqlDB)
 	updateH := &appupdate.Handler{Service: updateSvc}
 	serverH := &serverinfo.Handler{Cfg: &cfg, DB: sqlDB}
@@ -171,6 +171,7 @@ func runServe(log *slog.Logger) error {
 	auth := device.AuthMiddleware(deviceSvc)
 	mux.Handle("GET /api/v1/me", auth(http.HandlerFunc(deviceH.Me)))
 	mux.Handle("GET /api/v1/servers", auth(http.HandlerFunc(serverH.List)))
+	mux.Handle("GET /api/v1/devices/me/usage", auth(http.HandlerFunc(deviceH.Usage)))
 	mux.Handle("PUT /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Upsert)))
 	mux.Handle("GET /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Get)))
 
