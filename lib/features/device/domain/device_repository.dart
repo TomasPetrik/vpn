@@ -1,6 +1,7 @@
 import '../../vpn/domain/usage_series.dart';
 import 'device_registration.dart';
 import 'device_session.dart';
+import 'public_network_info.dart';
 import 'vpn_peer_config.dart';
 
 abstract class DeviceRepository {
@@ -17,4 +18,10 @@ abstract class DeviceRepository {
 
   /// Backend peer_stats daily/hourly buckets for this device.
   Future<UsageSeries> usageSeries({required String range});
+
+  /// Current public WAN IP (API-observed client IP, with public fallback).
+  Future<String?> currentPublicIp();
+
+  /// Current public WAN IP + country (for local-connection UI).
+  Future<PublicNetworkInfo> currentPublicNetwork();
 }

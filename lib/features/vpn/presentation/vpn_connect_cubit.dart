@@ -43,6 +43,8 @@ class VpnConnectState {
     this.lastHandshakeAt,
     this.sessionStartedAt,
     this.sessionSeconds = 0,
+    this.rxMbps = 0,
+    this.txMbps = 0,
     this.latencyMs,
     this.committedTotals = const VpnUsageTotals.zero(),
   });
@@ -57,6 +59,12 @@ class VpnConnectState {
   final DateTime? lastHandshakeAt;
   final DateTime? sessionStartedAt;
   final int sessionSeconds;
+
+  /// Instantaneous download rate from WireGuard counter deltas (Mbps).
+  final double rxMbps;
+
+  /// Instantaneous upload rate from WireGuard counter deltas (Mbps).
+  final double txMbps;
 
   /// Latest TCP-connect RTT through the tunnel, in milliseconds.
   final int? latencyMs;
@@ -101,6 +109,8 @@ class VpnConnectState {
     DateTime? lastHandshakeAt,
     DateTime? sessionStartedAt,
     int? sessionSeconds,
+    double? rxMbps,
+    double? txMbps,
     int? latencyMs,
     VpnUsageTotals? committedTotals,
     bool clearError = false,
@@ -121,6 +131,8 @@ class VpnConnectState {
       sessionStartedAt:
           clearSession ? null : (sessionStartedAt ?? this.sessionStartedAt),
       sessionSeconds: clearSession ? 0 : (sessionSeconds ?? this.sessionSeconds),
+      rxMbps: clearTraffic || clearSession ? 0 : (rxMbps ?? this.rxMbps),
+      txMbps: clearTraffic || clearSession ? 0 : (txMbps ?? this.txMbps),
       latencyMs: clearTraffic || clearSession
           ? null
           : (latencyMs ?? this.latencyMs),
@@ -165,6 +177,9 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   String? _lastStatusKey;
   bool _committingSession = false;
   bool _latencyInFlight = false;
+  int? _prevRxBytes;
+  int? _prevTxBytes;
+  DateTime? _prevTrafficSampleAt;
 
   @override
   Future<void> close() async {
@@ -214,6 +229,9 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   void _stopStatsPolling() {
     _statsTimer?.cancel();
     _statsTimer = null;
+    _prevRxBytes = null;
+    _prevTxBytes = null;
+    _prevTrafficSampleAt = null;
     _stopLatencyPolling();
   }
 
@@ -297,12 +315,35 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
 
   Future<void> _applyTraffic(VpnStatusSnapshot snap) async {
     _markSessionStarted();
-    final started = state.sessionStartedAt ?? DateTime.now();
-    final elapsed = DateTime.now().difference(started).inSeconds;
+    final now = DateTime.now();
+    final started = state.sessionStartedAt ?? now;
+    final elapsed = now.difference(started).inSeconds;
+    final rxMbps = _instantMbps(
+      previous: _prevRxBytes,
+      current: snap.rxBytes,
+      previousAt: _prevTrafficSampleAt,
+      now: now,
+    );
+    final txMbps = _instantMbps(
+      previous: _prevTxBytes,
+      current: snap.txBytes,
+      previousAt: _prevTrafficSampleAt,
+      now: now,
+    );
+    if (snap.rxBytes != null) {
+      _prevRxBytes = snap.rxBytes;
+    }
+    if (snap.txBytes != null) {
+      _prevTxBytes = snap.txBytes;
+    }
+    _prevTrafficSampleAt = now;
+
     final same = state.rxBytes == snap.rxBytes &&
         state.txBytes == snap.txBytes &&
         state.lastHandshakeAt == snap.lastHandshakeAt &&
-        state.sessionSeconds == elapsed;
+        state.sessionSeconds == elapsed &&
+        state.rxMbps == rxMbps &&
+        state.txMbps == txMbps;
     if (same) {
       return;
     }
@@ -313,6 +354,8 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         lastHandshakeAt: snap.lastHandshakeAt,
         sessionStartedAt: started,
         sessionSeconds: elapsed,
+        rxMbps: rxMbps,
+        txMbps: txMbps,
       ),
     );
     await _usageStatsStore.writeInflight(
@@ -320,6 +363,29 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       txBytes: snap.txBytes ?? state.txBytes ?? 0,
       activeSeconds: elapsed,
     );
+  }
+
+  static double _instantMbps({
+    required int? previous,
+    required int? current,
+    required DateTime? previousAt,
+    required DateTime now,
+  }) {
+    if (previous == null || current == null || previousAt == null) {
+      return 0;
+    }
+    final dtMs = now.difference(previousAt).inMilliseconds;
+    if (dtMs < 200) {
+      return 0;
+    }
+    final delta = current - previous;
+    if (delta <= 0) {
+      return 0;
+    }
+    final seconds = dtMs / 1000.0;
+    final mbps = (delta * 8) / seconds / 1e6;
+    // Quantize to avoid noisy UI rebuilds from float noise.
+    return (mbps * 100).roundToDouble() / 100;
   }
 
   Future<void> _commitCurrentSession() async {

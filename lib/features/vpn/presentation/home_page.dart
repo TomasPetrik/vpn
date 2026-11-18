@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,8 @@ import '../../../core/theme/cyber_shield_colors.dart';
 import '../../../core/theme/cyber_shield_theme.dart';
 import '../../app_update/domain/app_store_links.dart';
 import '../../app_update/presentation/app_update_cubit.dart';
+import '../../device/domain/device_repository.dart';
+import '../../device/domain/public_network_info.dart';
 import '../../servers/domain/vpn_server.dart';
 import '../../servers/presentation/server_info_cubit.dart';
 import 'home/connect_dial.dart';
@@ -156,16 +159,16 @@ class _HubHeader extends StatelessWidget {
           children: [
             Image.asset(
               'assets/branding/header_mark.png',
-              height: 28,
-              width: 28,
+              height: 32,
+              width: 32,
               filterQuality: FilterQuality.high,
               errorBuilder: (context, error, stackTrace) => const Icon(
                 Icons.shield_outlined,
-                size: 28,
+                size: 32,
                 color: CyberShieldColors.secondaryContainer,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Text(
               'PetrikVPN',
               style: CyberShieldTheme.headlineSm(
@@ -728,7 +731,40 @@ String _countryName(String code) {
     'NL' => 'NETHERLANDS',
     'US' => 'UNITED STATES',
     'CZ' => 'CZECHIA',
+    'AE' => 'UNITED ARAB EMIRATES',
+    'SK' => 'SLOVAKIA',
+    'PL' => 'POLAND',
+    'AT' => 'AUSTRIA',
+    'CH' => 'SWITZERLAND',
+    'GB' || 'UK' => 'UNITED KINGDOM',
+    'FR' => 'FRANCE',
+    'IT' => 'ITALY',
+    'ES' => 'SPAIN',
+    'UA' => 'UKRAINE',
+    'TR' => 'TURKEY',
     _ => code,
+  };
+}
+
+String _countryTitle(String code) {
+  return switch (code.toUpperCase()) {
+    'DE' => 'Germany',
+    'RU' => 'Russia',
+    'NL' => 'Netherlands',
+    'US' => 'United States',
+    'CZ' => 'Czechia',
+    'AE' => 'United Arab Emirates',
+    'SK' => 'Slovakia',
+    'PL' => 'Poland',
+    'AT' => 'Austria',
+    'CH' => 'Switzerland',
+    'GB' || 'UK' => 'United Kingdom',
+    'FR' => 'France',
+    'IT' => 'Italy',
+    'ES' => 'Spain',
+    'UA' => 'Ukraine',
+    'TR' => 'Turkey',
+    _ => code.toUpperCase(),
   };
 }
 
@@ -742,7 +778,6 @@ class _TelemetryGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final rx = connect.rxBytes ?? 0;
     final tx = connect.txBytes ?? 0;
-    final seconds = connect.sessionSeconds;
 
     return Row(
       children: [
@@ -755,7 +790,8 @@ class _TelemetryGrid extends StatelessWidget {
             value: switch (visual) {
               _HubVisualState.disconnected => '0.0',
               _HubVisualState.connecting => '--',
-              _HubVisualState.connected => VpnStatsFormat.mbps(rx, seconds),
+              _HubVisualState.connected =>
+                VpnStatsFormat.mbpsRate(connect.rxMbps),
             },
             unit: switch (visual) {
               _HubVisualState.connecting => 'Measuring...',
@@ -764,10 +800,13 @@ class _TelemetryGrid extends StatelessWidget {
             badge: switch (visual) {
               _HubVisualState.disconnected => 'IDLE',
               _HubVisualState.connecting => 'TESTING',
-              _HubVisualState.connected => 'FAST',
+              _HubVisualState.connected =>
+                connect.rxMbps > 0.05 ? 'LIVE' : 'IDLE',
             },
             badgeColor: switch (visual) {
-              _HubVisualState.connected => CyberShieldColors.tertiary,
+              _HubVisualState.connected => connect.rxMbps > 0.05
+                  ? CyberShieldColors.tertiary
+                  : CyberShieldColors.onSurfaceVariant,
               _HubVisualState.connecting =>
                 CyberShieldColors.secondaryContainer,
               _HubVisualState.disconnected =>
@@ -794,7 +833,8 @@ class _TelemetryGrid extends StatelessWidget {
             value: switch (visual) {
               _HubVisualState.disconnected => '0.0',
               _HubVisualState.connecting => '--',
-              _HubVisualState.connected => VpnStatsFormat.mbps(tx, seconds),
+              _HubVisualState.connected =>
+                VpnStatsFormat.mbpsRate(connect.txMbps),
             },
             unit: switch (visual) {
               _HubVisualState.connecting => 'Measuring...',
@@ -803,10 +843,13 @@ class _TelemetryGrid extends StatelessWidget {
             badge: switch (visual) {
               _HubVisualState.disconnected => 'IDLE',
               _HubVisualState.connecting => 'PROBING',
-              _HubVisualState.connected => 'STABLE',
+              _HubVisualState.connected =>
+                connect.txMbps > 0.05 ? 'LIVE' : 'IDLE',
             },
             badgeColor: switch (visual) {
-              _HubVisualState.connected => CyberShieldColors.primary,
+              _HubVisualState.connected => connect.txMbps > 0.05
+                  ? CyberShieldColors.primary
+                  : CyberShieldColors.onSurfaceVariant,
               _HubVisualState.connecting => CyberShieldColors.primary,
               _HubVisualState.disconnected =>
                 CyberShieldColors.onSurfaceVariant,
@@ -966,14 +1009,57 @@ class _TelemetryCard extends StatelessWidget {
   }
 }
 
-class _ServerDetailCard extends StatelessWidget {
+class _ServerDetailCard extends StatefulWidget {
   const _ServerDetailCard({required this.connect, required this.visual});
 
   final VpnConnectState connect;
   final _HubVisualState visual;
 
   @override
+  State<_ServerDetailCard> createState() => _ServerDetailCardState();
+}
+
+class _ServerDetailCardState extends State<_ServerDetailCard> {
+  PublicNetworkInfo? _localNetwork;
+  bool _loadingLocalNetwork = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.visual == _HubVisualState.disconnected) {
+      unawaited(_refreshLocalNetwork());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ServerDetailCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visual == _HubVisualState.disconnected &&
+        oldWidget.visual != _HubVisualState.disconnected) {
+      unawaited(_refreshLocalNetwork());
+    }
+  }
+
+  Future<void> _refreshLocalNetwork() async {
+    if (_loadingLocalNetwork) return;
+    setState(() => _loadingLocalNetwork = true);
+    try {
+      final info = await getIt<DeviceRepository>().currentPublicNetwork();
+      if (!mounted) return;
+      setState(() {
+        _localNetwork = info;
+        _loadingLocalNetwork = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingLocalNetwork = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final connect = widget.connect;
+    final visual = widget.visual;
     return BlocBuilder<ServerInfoCubit, ServerInfoState>(
       builder: (context, state) {
         final fallback = switch (state) {
@@ -981,27 +1067,48 @@ class _ServerDetailCard extends StatelessWidget {
             servers.first,
           _ => null,
         };
-        final server = connect.peer?.server ?? fallback;
-        final ip = connect.peer?.transport.serverIps.isNotEmpty == true
-            ? connect.peer!.transport.serverIps.first
-            : (connect.peer?.interfaceAddresses.isNotEmpty == true
-                ? connect.peer!.interfaceAddresses.first.split('/').first
-                : '—');
+        final vpnServer = connect.peer?.server ?? fallback;
+        final vpnCountryCode =
+            (vpnServer?.countryCode ?? 'DE').toUpperCase();
+        final localCountryCode = _localNetwork?.countryCode?.toUpperCase();
+
+        final isLocal = visual == _HubVisualState.disconnected;
+        final flagCode = isLocal ? localCountryCode : vpnCountryCode;
+        final locationName = isLocal
+            ? (localCountryCode == null
+                ? (_loadingLocalNetwork ? 'Detecting…' : 'Local network')
+                : _countryTitle(localCountryCode))
+            : _countryTitle(vpnCountryCode);
+
+        final tunnelOrServerIp =
+            connect.peer?.transport.serverIps.isNotEmpty == true
+                ? connect.peer!.transport.serverIps.first
+                : (connect.peer?.interfaceAddresses.isNotEmpty == true
+                    ? connect.peer!.interfaceAddresses.first.split('/').first
+                    : null);
+        final localIp = _localNetwork?.ip;
+        final ip = switch (visual) {
+          _HubVisualState.disconnected =>
+            _loadingLocalNetwork && (localIp == null || localIp.isEmpty)
+                ? '…'
+                : (localIp?.isNotEmpty == true ? localIp! : '—'),
+          _ => tunnelOrServerIp ?? '—',
+        };
 
         final (title, statusLabel, statusColor) = switch (visual) {
           _HubVisualState.connected => (
-              'Connected Server',
+              'Current Connection',
               'Connected',
               CyberShieldColors.tertiary,
             ),
           _HubVisualState.connecting => (
-              'Target Server',
+              'Current Connection',
               'Handshaking...',
               CyberShieldColors.secondaryContainer,
             ),
           _HubVisualState.disconnected => (
-              'Selected Server',
-              'Standby',
+              'Current Connection',
+              'Direct',
               CyberShieldColors.onSurfaceVariant,
             ),
         };
@@ -1053,10 +1160,16 @@ class _ServerDetailCard extends StatelessWidget {
                       color: CyberShieldColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      countryFlagEmoji(server?.countryCode),
-                      style: const TextStyle(fontSize: 24),
-                    ),
+                    child: flagCode == null
+                        ? Icon(
+                            Icons.public,
+                            size: 22,
+                            color: CyberShieldColors.onSurfaceVariant,
+                          )
+                        : Text(
+                            countryFlagEmoji(flagCode),
+                            style: const TextStyle(fontSize: 24),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1067,12 +1180,12 @@ class _ServerDetailCard extends StatelessWidget {
                           children: [
                             Flexible(
                               child: Text(
-                                server?.name ?? 'PetrikVPN',
+                                locationName,
                                 style: CyberShieldTheme.headlineSm(),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (server?.countryCode != null) ...[
+                            if (flagCode != null) ...[
                               const SizedBox(width: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -1085,7 +1198,7 @@ class _ServerDetailCard extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  server!.countryCode!.toUpperCase(),
+                                  flagCode,
                                   style: CyberShieldTheme.labelBadge(
                                     color: visual == _HubVisualState.connecting
                                         ? CyberShieldColors.secondaryContainer
@@ -1098,7 +1211,7 @@ class _ServerDetailCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'IP: $ip',
+                          isLocal ? 'Your IP: $ip' : 'IP: $ip',
                           style: CyberShieldTheme.labelCode(),
                         ),
                       ],

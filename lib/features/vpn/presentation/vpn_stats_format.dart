@@ -1,19 +1,26 @@
 class VpnStatsFormat {
   const VpnStatsFormat._();
 
+  /// Format an instantaneous megabits/sec rate.
+  static String mbpsRate(double mbps) {
+    if (mbps <= 0 || mbps.isNaN || mbps.isInfinite) {
+      return '0.0';
+    }
+    if (mbps >= 100) {
+      return mbps.toStringAsFixed(0);
+    }
+    if (mbps >= 10) {
+      return mbps.toStringAsFixed(1);
+    }
+    return mbps.toStringAsFixed(2);
+  }
+
   /// Average megabits/sec from transferred [bytes] over [seconds].
   static String mbps(int bytes, int seconds) {
     if (seconds <= 0 || bytes <= 0) {
       return '0.0';
     }
-    final value = (bytes * 8) / seconds / 1e6;
-    if (value >= 100) {
-      return value.toStringAsFixed(0);
-    }
-    if (value >= 10) {
-      return value.toStringAsFixed(1);
-    }
-    return value.toStringAsFixed(1);
+    return mbpsRate((bytes * 8) / seconds / 1e6);
   }
 
   static String bytes(int bytes) {

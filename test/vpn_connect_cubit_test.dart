@@ -218,6 +218,38 @@ void main() {
     },
   );
 
+  test('traffic poll derives live download/upload Mbps from counter deltas',
+      () async {
+    when(() => engine.getStatus()).thenAnswer(
+      (_) async => const VpnStatusSnapshot(
+        status: 'connected',
+        extensionStatus: 'wireguard_started',
+        extensionLog: [],
+        rxBytes: 1_000_000,
+        txBytes: 500_000,
+      ),
+    );
+    final cubit = buildCubit();
+    await cubit.connect();
+    expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
+
+    // Baseline sample stored; bump RX by 1.25 MB over the next 1s poll ≈ 10 Mbps.
+    when(() => engine.getStatus()).thenAnswer(
+      (_) async => const VpnStatusSnapshot(
+        status: 'connected',
+        extensionStatus: 'wireguard_started',
+        extensionLog: [],
+        rxBytes: 2_250_000,
+        txBytes: 500_000,
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    expect(cubit.state.rxBytes, 2_250_000);
+    expect(cubit.state.rxMbps, greaterThan(5));
+    expect(cubit.state.txMbps, 0);
+    await cubit.close();
+  });
+
   blocTest<VpnConnectCubit, VpnConnectState>(
     'connected session stores tunnel latency from probe',
     build: buildCubit,

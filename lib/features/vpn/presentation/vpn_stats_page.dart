@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -24,48 +25,74 @@ class VpnStatsPage extends StatefulWidget {
 
 class _VpnStatsPageState extends State<VpnStatsPage> {
   _StatsPeriod _period = _StatsPeriod.days7;
-  late UsageSeries _usage = UsageSeries.scaffold(range: '7d');
-  bool _usageLoading = false;
+  final Map<String, UsageSeries> _usageCache = {
+    for (final range in const ['24h', '7d', '30d', 'all'])
+      range: UsageSeries.scaffold(range: range),
+  };
+  final Set<String> _usageFetched = {};
+  final Set<String> _usageInFlight = {};
+
+  UsageSeries get _usage =>
+      _usageCache[_apiRange] ?? UsageSeries.scaffold(range: _apiRange);
 
   @override
   void initState() {
     super.initState();
     context.read<VpnConnectCubit>().refreshCommittedTotals();
-    _loadUsage();
+    // Warm current + neighbors in the background (no spinner).
+    unawaited(_ensureUsage(_apiRange));
+    unawaited(_prefetchNeighbors(_apiRange));
   }
 
-  String get _apiRange => switch (_period) {
+  String get _apiRange => _rangeFor(_period);
+
+  static String _rangeFor(_StatsPeriod period) => switch (period) {
         _StatsPeriod.today => '24h',
         _StatsPeriod.days7 => '7d',
         _StatsPeriod.days30 => '30d',
         _StatsPeriod.all => 'all',
       };
 
-  Future<void> _loadUsage() async {
-    final range = _apiRange;
-    setState(() {
-      _usageLoading = true;
-      // Keep a drawable line visible while refreshing.
-      if (_usage.points.isEmpty) {
-        _usage = UsageSeries.scaffold(range: range);
-      }
-    });
+  void _selectPeriod(_StatsPeriod value) {
+    if (value == _period) return;
+    final range = _rangeFor(value);
+    setState(() => _period = value);
+    // Instant axis/scaffold swap from cache; refresh silently.
+    unawaited(_ensureUsage(range));
+    unawaited(_prefetchNeighbors(range));
+  }
+
+  Future<void> _prefetchNeighbors(String current) async {
+    const order = ['24h', '7d', '30d', 'all'];
+    final i = order.indexOf(current);
+    if (i < 0) return;
+    if (i > 0) unawaited(_ensureUsage(order[i - 1]));
+    if (i < order.length - 1) unawaited(_ensureUsage(order[i + 1]));
+  }
+
+  Future<void> _loadUsage() => _ensureUsage(_apiRange, force: true);
+
+  Future<void> _ensureUsage(String range, {bool force = false}) async {
+    if (!force && _usageFetched.contains(range)) return;
+    if (_usageInFlight.contains(range)) return;
+    _usageInFlight.add(range);
     try {
       final series = await getIt<DeviceRepository>().usageSeries(range: range);
       if (!mounted) return;
+      final next = series.points.isEmpty
+          ? UsageSeries.scaffold(range: range)
+          : series;
       setState(() {
-        _usage = series.points.isEmpty
-            ? UsageSeries.scaffold(range: range)
-            : series;
-        _usageLoading = false;
+        _usageCache[range] = next;
+        _usageFetched.add(range);
       });
     } catch (_) {
       if (!mounted) return;
-      // Never surface Retry — keep zero-filled line chart for the period.
       setState(() {
-        _usage = UsageSeries.scaffold(range: range);
-        _usageLoading = false;
+        _usageCache[range] ??= UsageSeries.scaffold(range: range);
       });
+    } finally {
+      _usageInFlight.remove(range);
     }
   }
 
@@ -127,7 +154,8 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                                   context
                                       .read<VpnConnectCubit>()
                                       .refreshCommittedTotals();
-                                  _loadUsage();
+                                  _usageFetched.remove(_apiRange);
+                                  unawaited(_loadUsage());
                                 },
                                 icon: const Icon(Icons.refresh, size: 20),
                                 color: CyberShieldColors.onSurfaceVariant,
@@ -136,14 +164,10 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                _PeriodSelector(
-                  period: _period,
-                  onChanged: (value) {
-                    if (value == _period) return;
-                    setState(() => _period = value);
-                    _loadUsage();
-                  },
-                ),
+                        _PeriodSelector(
+                          period: _period,
+                          onChanged: _selectPeriod,
+                        ),
                       ],
                     ),
                   ),
@@ -232,7 +256,6 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                       _BandwidthPulseCard(
                         period: _period,
                         series: _usage,
-                        loading: _usageLoading,
                       ),
                       const SizedBox(height: 16),
                       _SessionLedger(
@@ -511,12 +534,10 @@ class _BandwidthPulseCard extends StatelessWidget {
   const _BandwidthPulseCard({
     required this.period,
     required this.series,
-    required this.loading,
   });
 
   final _StatsPeriod period;
   final UsageSeries series;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -591,31 +612,75 @@ class _BandwidthPulseCard extends StatelessWidget {
           SizedBox(
             height: 160,
             width: double.infinity,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _PulseChartPainter(
-                      rxValues: [
-                        for (final p in points) p.rxBytes.toDouble(),
-                      ],
-                      txValues: [
-                        for (final p in points) p.txBytes.toDouble(),
-                      ],
-                      highlightIndex: peakIndex,
+            child: Builder(
+              builder: (context) {
+                final rxValues = [
+                  for (final p in points) p.rxBytes.toDouble(),
+                ];
+                final txValues = [
+                  for (final p in points) p.txBytes.toDouble(),
+                ];
+                var maxBytes = 0;
+                for (final p in points) {
+                  maxBytes = math.max(maxBytes, p.rxBytes);
+                  maxBytes = math.max(maxBytes, p.txBytes);
+                }
+                final midBytes = maxBytes ~/ 2;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final h = constraints.maxHeight;
+                          // Match painter top/mid/baseline fractions.
+                          const topFrac = 0.08;
+                          const midFrac = 0.48;
+                          const baseFrac = 0.88;
+                          Text tick(String text) => Text(
+                                text,
+                                style: CyberShieldTheme.labelCode(
+                                  color: CyberShieldColors.onSurfaceVariant,
+                                ).copyWith(fontSize: 9),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                              );
+                          return Stack(
+                            children: [
+                              Positioned(
+                                right: 6,
+                                top: h * topFrac - 6,
+                                child: tick(VpnStatsFormat.bytes(maxBytes)),
+                              ),
+                              Positioned(
+                                right: 6,
+                                top: h * midFrac - 6,
+                                child: tick(VpnStatsFormat.bytes(midBytes)),
+                              ),
+                              Positioned(
+                                right: 6,
+                                top: h * baseFrac - 6,
+                                child: tick('0'),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ),
-                if (loading)
-                  const Align(
-                    alignment: Alignment.topRight,
-                    child: SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                    Expanded(
+                      child: CustomPaint(
+                        painter: _PulseChartPainter(
+                          rxValues: rxValues,
+                          txValues: txValues,
+                          highlightIndex: peakIndex,
+                        ),
+                      ),
                     ),
-                  ),
-              ],
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 8),
@@ -732,11 +797,20 @@ class _PulseChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Align with left Y labels: top / mid / baseline.
+    const topFrac = 0.08;
+    const midFrac = 0.48;
+    const baseFrac = 0.88;
     final grid = Paint()
       ..color = CyberShieldColors.surfaceVariant
       ..strokeWidth = 0.75
-      ..style = PaintingStyle.stroke;
-    for (final y in [size.height * 0.15, size.height * 0.45, size.height * 0.75]) {
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+    for (final y in [
+      size.height * topFrac,
+      size.height * midFrac,
+      size.height * baseFrac,
+    ]) {
       _dashLine(canvas, Offset(0, y), Offset(size.width, y), grid);
     }
 
@@ -745,8 +819,12 @@ class _PulseChartPainter extends CustomPainter {
         ..color = CyberShieldColors.outlineVariant
         ..strokeWidth = 1.5
         ..style = PaintingStyle.stroke;
-      final y = size.height * 0.85;
-      _dashLine(canvas, Offset(0, y), Offset(size.width, y), idle);
+      _dashLine(
+        canvas,
+        Offset(0, size.height * baseFrac),
+        Offset(size.width, size.height * baseFrac),
+        idle,
+      );
       return;
     }
 
@@ -759,39 +837,61 @@ class _PulseChartPainter extends CustomPainter {
     }
     // All-zero windows still draw flat baseline lines (never blank / retry).
     final scale = maxValue <= 0 ? 1.0 : maxValue;
-    final downPoints = _seriesPoints(size, rxValues, scale);
-    final upPoints = _seriesPoints(size, txValues, scale);
+    final downPoints = _seriesPoints(
+      size,
+      rxValues,
+      scale,
+      topFrac: topFrac,
+      baseFrac: baseFrac,
+    );
+    final upPoints = _seriesPoints(
+      size,
+      txValues,
+      scale,
+      topFrac: topFrac,
+      baseFrac: baseFrac,
+    );
 
-    _fillCurve(canvas, size, upPoints, CyberShieldColors.primary, 0.15);
+    _fillCurve(canvas, size, upPoints, CyberShieldColors.primary, 0.10);
     _strokeCurve(canvas, upPoints, CyberShieldColors.primary, 1.75);
-    _fillCurve(canvas, size, downPoints, CyberShieldColors.secondaryContainer, 0.35);
-    _strokeCurve(canvas, downPoints, CyberShieldColors.secondaryContainer, 2.25);
+    _fillCurve(canvas, size, downPoints, CyberShieldColors.secondaryContainer, 0.12);
+    _strokeCurve(canvas, downPoints, CyberShieldColors.secondaryContainer, 2.0);
 
     if (highlightIndex >= 0 && highlightIndex < downPoints.length) {
       final peak = downPoints[highlightIndex];
       canvas.drawCircle(
         peak,
-        4.5,
-        Paint()..color = CyberShieldColors.secondaryContainer,
+        3.5,
+        Paint()
+          ..color = CyberShieldColors.secondaryContainer
+          ..isAntiAlias = true,
       );
       canvas.drawCircle(
         peak,
-        4.5,
+        3.5,
         Paint()
           ..color = CyberShieldColors.surfaceContainerLowest
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
+          ..strokeWidth = 1.5
+          ..isAntiAlias = true,
       );
     }
   }
 
-  List<Offset> _seriesPoints(Size size, List<double> values, double maxValue) {
+  List<Offset> _seriesPoints(
+    Size size,
+    List<double> values,
+    double maxValue, {
+    required double topFrac,
+    required double baseFrac,
+  }) {
     final points = <Offset>[];
     final n = values.length;
+    final span = baseFrac - topFrac;
     for (var i = 0; i < n; i++) {
       final t = n == 1 ? 0.0 : i / (n - 1);
       final norm = (values[i] / maxValue).clamp(0.0, 1.0);
-      final y = size.height * (0.88 - 0.7 * norm);
+      final y = size.height * (baseFrac - span * norm);
       points.add(Offset(size.width * t, y));
     }
     return points;
@@ -844,9 +944,8 @@ class _PulseChartPainter extends CustomPainter {
         ..strokeWidth = width
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
-        ..maskFilter = color == CyberShieldColors.secondaryContainer
-            ? const MaskFilter.blur(BlurStyle.normal, 1.5)
-            : null,
+        ..strokeJoin = StrokeJoin.round
+        ..isAntiAlias = true,
     );
   }
 

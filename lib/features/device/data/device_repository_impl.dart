@@ -7,6 +7,7 @@ import '../../vpn/domain/usage_series.dart';
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
 import '../domain/device_session.dart';
+import '../domain/public_network_info.dart';
 import '../domain/vpn_peer_config.dart';
 import 'device_api.dart';
 import 'device_info_source.dart';
@@ -120,5 +121,69 @@ class DeviceRepositoryImpl implements DeviceRepository {
     await ensureSession();
     final data = await api.usage(range: range);
     return UsageSeries.fromJson(data);
+  }
+
+  @override
+  Future<String?> currentPublicIp() async {
+    final info = await currentPublicNetwork();
+    return info.ip;
+  }
+
+  @override
+  Future<PublicNetworkInfo> currentPublicNetwork() async {
+    try {
+      await ensureSession();
+      final session = await me();
+      final ip = session.clientIp?.trim();
+      if (ip != null && ip.isNotEmpty) {
+        final country = session.clientCountry;
+        if (country != null && country.isNotEmpty) {
+          return PublicNetworkInfo(ip: ip, countryCode: country);
+        }
+        final resolved = await _countryForIp(ip);
+        return PublicNetworkInfo(ip: ip, countryCode: resolved);
+      }
+    } catch (_) {
+      // Fall through to public echo services.
+    }
+
+    try {
+      final response = await Dio().get<Map<String, dynamic>>(
+        'https://api.country.is/',
+      );
+      final data = response.data;
+      final ip = data?['ip']?.toString().trim();
+      final country = data?['country']?.toString().trim().toUpperCase();
+      if (ip != null && ip.isNotEmpty) {
+        return PublicNetworkInfo(
+          ip: ip,
+          countryCode: (country != null && country.length == 2) ? country : null,
+        );
+      }
+    } catch (_) {}
+
+    try {
+      final response = await Dio().get<String>('https://api.ipify.org');
+      final ip = response.data?.trim();
+      if (ip != null && ip.isNotEmpty) {
+        final country = await _countryForIp(ip);
+        return PublicNetworkInfo(ip: ip, countryCode: country);
+      }
+    } catch (_) {}
+
+    return const PublicNetworkInfo();
+  }
+
+  Future<String?> _countryForIp(String ip) async {
+    try {
+      final response = await Dio().get<Map<String, dynamic>>(
+        'https://api.country.is/$ip',
+      );
+      final country = response.data?['country']?.toString().trim().toUpperCase();
+      if (country != null && country.length == 2) {
+        return country;
+      }
+    } catch (_) {}
+    return null;
   }
 }

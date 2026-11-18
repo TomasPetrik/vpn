@@ -93,9 +93,16 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusUnauthorized, "invalid_token", "unauthorized")
 		return
 	}
+	clientIP := httpapi.ClientIP(r)
+	country := ""
+	if h.Service != nil && h.Service.CountryOf != nil && clientIP != "" {
+		country = h.Service.CountryOf(clientIP)
+	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
-		"user_id":   u,
-		"device_id": d,
+		"user_id":        u,
+		"device_id":      d,
+		"client_ip":      clientIP,
+		"client_country": country,
 	})
 }
 
