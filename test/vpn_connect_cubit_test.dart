@@ -6,11 +6,65 @@ import 'package:ru_eu_vpn/features/device/domain/device_session.dart';
 import 'package:ru_eu_vpn/features/device/domain/vpn_peer_config.dart';
 import 'package:ru_eu_vpn/features/servers/domain/vpn_server.dart';
 import 'package:ru_eu_vpn/features/vpn/domain/vpn_engine.dart';
+import 'package:ru_eu_vpn/features/vpn/domain/vpn_usage_stats.dart';
 import 'package:ru_eu_vpn/features/vpn/presentation/vpn_connect_cubit.dart';
 
 class _MockDeviceRepository extends Mock implements DeviceRepository {}
 
 class _MockVpnEngine extends Mock implements VpnEngine {}
+
+class _MemoryUsageStore implements VpnUsageStatsStore {
+  VpnUsageTotals committed = const VpnUsageTotals.zero();
+  VpnUsageTotals? inflight;
+
+  @override
+  Future<VpnUsageTotals> readCommitted() async => committed;
+
+  @override
+  Future<void> commitSession({
+    required int rxBytes,
+    required int txBytes,
+    required int activeSeconds,
+  }) async {
+    committed = committed.addSession(
+      rxBytes: rxBytes,
+      txBytes: txBytes,
+      activeSeconds: activeSeconds,
+    );
+    inflight = null;
+  }
+
+  @override
+  Future<void> writeInflight({
+    required int rxBytes,
+    required int txBytes,
+    required int activeSeconds,
+  }) async {
+    inflight = VpnUsageTotals(
+      rxBytes: rxBytes,
+      txBytes: txBytes,
+      activeSeconds: activeSeconds,
+    );
+  }
+
+  @override
+  Future<void> clearInflight() async {
+    inflight = null;
+  }
+
+  @override
+  Future<VpnUsageTotals> recoverInflightIfNeeded() async {
+    if (inflight == null) {
+      return committed;
+    }
+    await commitSession(
+      rxBytes: inflight!.rxBytes,
+      txBytes: inflight!.txBytes,
+      activeSeconds: inflight!.activeSeconds,
+    );
+    return committed;
+  }
+}
 
 void main() {
   setUpAll(() {
@@ -19,6 +73,7 @@ void main() {
 
   late _MockDeviceRepository repo;
   late _MockVpnEngine engine;
+  late _MemoryUsageStore usage;
 
   final peer = VpnPeerConfig(
     peerId: 'peer-1',
@@ -39,9 +94,16 @@ void main() {
     ),
   );
 
+  VpnConnectCubit buildCubit() => VpnConnectCubit(
+        deviceRepository: repo,
+        vpnEngine: engine,
+        usageStatsStore: usage,
+      );
+
   setUp(() {
     repo = _MockDeviceRepository();
     engine = _MockVpnEngine();
+    usage = _MemoryUsageStore();
     when(() => repo.me()).thenAnswer(
       (_) async => const DeviceSession(userId: 'u1', deviceId: 'd1'),
     );
@@ -75,7 +137,7 @@ void main() {
 
   blocTest<VpnConnectCubit, VpnConnectState>(
     'connect starts wstunnel+WireGuardKit and reaches skeletonConnected',
-    build: () => VpnConnectCubit(deviceRepository: repo, vpnEngine: engine),
+    build: buildCubit,
     act: (cubit) => cubit.connect(),
     wait: const Duration(milliseconds: 500),
     verify: (cubit) {
@@ -88,7 +150,8 @@ void main() {
       expect(cfg['server_ips'], ['72.61.158.103']);
       expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
       expect(cubit.state.peer?.peerId, 'peer-1');
-      expect(cubit.state.stepLabel, contains('Connected'));
+      expect(cubit.state.stepLabel, 'Connected');
+      expect(cubit.state.sessionStartedAt, isNotNull);
     },
   );
 
@@ -96,19 +159,14 @@ void main() {
     'connect failure emits error with log',
     build: () {
       when(() => repo.me()).thenThrow(Exception('offline'));
-      return VpnConnectCubit(deviceRepository: repo, vpnEngine: engine);
+      return buildCubit();
     },
     act: (cubit) => cubit.connect(),
-    expect: () => [
-      isA<VpnConnectState>().having(
-        (s) => s.phase,
-        'phase',
-        VpnConnectPhase.checkingSession,
-      ),
-      isA<VpnConnectState>()
-          .having((s) => s.phase, 'phase', VpnConnectPhase.error)
-          .having((s) => s.log, 'log', isNotEmpty),
-    ],
+    verify: (cubit) {
+      expect(cubit.state.phase, VpnConnectPhase.error);
+      expect(cubit.state.log, isNotEmpty);
+      expect(cubit.state.errorMessage, contains('offline'));
+    },
   );
 
   blocTest<VpnConnectCubit, VpnConnectState>(
@@ -124,7 +182,7 @@ void main() {
           lastHandshakeAt: DateTime.utc(2026, 11, 18, 3, 0, 0),
         ),
       );
-      return VpnConnectCubit(deviceRepository: repo, vpnEngine: engine);
+      return buildCubit();
     },
     act: (cubit) => cubit.connect(),
     wait: const Duration(milliseconds: 500),
@@ -136,6 +194,40 @@ void main() {
         cubit.state.lastHandshakeAt,
         DateTime.utc(2026, 11, 18, 3, 0, 0),
       );
+    },
+  );
+
+  blocTest<VpnConnectCubit, VpnConnectState>(
+    'disconnect commits session into overall totals',
+    build: () {
+      when(() => engine.getStatus()).thenAnswer(
+        (_) async => const VpnStatusSnapshot(
+          status: 'connected',
+          extensionStatus: 'wireguard_started',
+          extensionLog: [],
+          rxBytes: 2000,
+          txBytes: 1000,
+        ),
+      );
+      when(() => engine.stopTunnel()).thenAnswer(
+        (_) async => const VpnTunnelResult(
+          ok: true,
+          status: 'disconnected',
+          message: 'stopped',
+        ),
+      );
+      return buildCubit();
+    },
+    act: (cubit) async {
+      await cubit.connect();
+      await cubit.disconnect();
+    },
+    wait: const Duration(milliseconds: 600),
+    verify: (cubit) {
+      expect(cubit.state.phase, VpnConnectPhase.idle);
+      expect(usage.committed.rxBytes, 2000);
+      expect(usage.committed.txBytes, 1000);
+      expect(cubit.state.committedTotals.rxBytes, 2000);
     },
   );
 
@@ -156,4 +248,3 @@ void main() {
     );
   });
 }
-

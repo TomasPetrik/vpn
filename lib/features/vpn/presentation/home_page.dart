@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/di/injection.dart';
 import '../../app_update/presentation/app_update_cubit.dart';
 import '../../servers/presentation/server_info_cubit.dart';
 import 'vpn_connect_cubit.dart';
+import 'vpn_stats_format.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -14,219 +16,229 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDevMode = getIt<AppConfig>().isDevMode;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('PetrikVPN')),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          BlocBuilder<AppUpdateCubit, AppUpdateState>(
-            builder: (context, state) {
-              if (state is! AppUpdateAvailable) {
-                return const SizedBox.shrink();
-              }
-              return Card(
-                child: ListTile(
-                  title: const Text('Update available'),
-                  subtitle: Text(state.policy.message.isEmpty
-                      ? 'A newer PetrikVPN build is available.'
-                      : state.policy.message),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          BlocBuilder<ServerInfoCubit, ServerInfoState>(
-            builder: (context, state) {
-              return switch (state) {
-                ServerInfoLoading() => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                ServerInfoError(:final message) => Text('Server info: $message'),
-                ServerInfoLoaded(:final servers) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Server',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      if (servers.isEmpty) const Text('No servers'),
-                      ...servers.map(
-                        (s) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(s.name),
-                          subtitle: Text(
-                            [
-                              if (s.countryCode != null) s.countryCode!,
-                              if (s.city != null && s.city!.isNotEmpty) s.city!,
-                              s.status,
-                            ].join(' · '),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-              };
-            },
-          ),
-          const SizedBox(height: 32),
-          BlocBuilder<VpnConnectCubit, VpnConnectState>(
-            builder: (context, connect) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      if (connect.isBusy) ...[
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 12),
-                      ],
-                      Expanded(
-                        child: Text(
-                          connect.stepLabel,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (connect.errorMessage != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      connect.errorMessage!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                  if (connect.peer != null &&
-                      (connect.phase == VpnConnectPhase.skeletonConnected ||
-                          connect.phase == VpnConnectPhase.error)) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tunnel IP: ${connect.peer!.interfaceAddresses.join(', ')}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  if (connect.phase == VpnConnectPhase.skeletonConnected &&
-                      (connect.hasTrafficStats ||
-                          connect.lastHandshakeAt != null)) ...[
-                    const SizedBox(height: 12),
-                    _TunnelStatsPanel(
-                      rxBytes: connect.rxBytes,
-                      txBytes: connect.txBytes,
-                      lastHandshakeAt: connect.lastHandshakeAt,
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: connect.canConnect
-                        ? () => context.read<VpnConnectCubit>().connect()
-                        : null,
-                    child: Text(
-                      connect.phase == VpnConnectPhase.skeletonConnected ||
-                              connect.phase == VpnConnectPhase.error
-                          ? 'Retry'
-                          : 'Connect',
-                    ),
-                  ),
-                  if (connect.canDisconnect) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () =>
-                          context.read<VpnConnectCubit>().disconnect(),
-                      child: const Text('Disconnect'),
-                    ),
-                  ],
-                  if (connect.canReset) ...[
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => context.read<VpnConnectCubit>().reset(),
-                      child: const Text('Reset'),
-                    ),
-                  ],
-                  if (isDevMode && connect.log.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _ConnectLogPanel(log: connect.log),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Statistics',
+          onPressed: () => context.push('/stats'),
+          icon: const Icon(Icons.bar_chart_rounded),
+        ),
+        title: const Text('PetrikVPN'),
       ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BlocBuilder<AppUpdateCubit, AppUpdateState>(
+                builder: (context, state) {
+                  if (state is! AppUpdateAvailable) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      state.policy.message.isEmpty
+                          ? 'Update available'
+                          : state.policy.message,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                },
+              ),
+              Expanded(
+                child: BlocBuilder<VpnConnectCubit, VpnConnectState>(
+                  builder: (context, connect) {
+                    return Column(
+                      children: [
+                        const Spacer(),
+                        _ServerLine(),
+                        const SizedBox(height: 28),
+                        _StatusBlock(connect: connect),
+                        if (connect.hasSessionStats) ...[
+                          const SizedBox(height: 28),
+                          _SessionStats(connect: connect),
+                        ],
+                        if (connect.errorMessage != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            connect.errorMessage!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const Spacer(),
+                        if (connect.isBusy)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 16),
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        if (connect.canDisconnect)
+                          FilledButton(
+                            onPressed: () =>
+                                context.read<VpnConnectCubit>().disconnect(),
+                            child: const Text('Disconnect'),
+                          )
+                        else
+                          FilledButton(
+                            onPressed: connect.canConnect
+                                ? () =>
+                                    context.read<VpnConnectCubit>().connect()
+                                : null,
+                            child: const Text('Connect'),
+                          ),
+                        if (isDevMode && connect.log.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: () => _showConnectLog(context, connect),
+                            child: const Text('Connect log'),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showConnectLog(BuildContext context, VpnConnectState connect) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.paddingOf(context).bottom + 16,
+          ),
+          child: _ConnectLogPanel(log: connect.log),
+        );
+      },
     );
   }
 }
 
-class _TunnelStatsPanel extends StatelessWidget {
-  const _TunnelStatsPanel({
-    required this.rxBytes,
-    required this.txBytes,
-    required this.lastHandshakeAt,
-  });
-
-  final int? rxBytes;
-  final int? txBytes;
-  final DateTime? lastHandshakeAt;
-
-  static String formatBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit++;
-    }
-    final digits = value >= 100 || unit == 0 ? 0 : (value >= 10 ? 1 : 2);
-    return '${value.toStringAsFixed(digits)} ${units[unit]}';
+class _ServerLine extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return BlocBuilder<VpnConnectCubit, VpnConnectState>(
+      buildWhen: (a, b) => a.peer?.server.id != b.peer?.server.id,
+      builder: (context, connect) {
+        final peerServer = connect.peer?.server;
+        if (peerServer != null) {
+          return Text(
+            [
+              peerServer.name,
+              if (peerServer.countryCode != null) peerServer.countryCode!,
+            ].join(' · '),
+            style: theme.textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          );
+        }
+        return BlocBuilder<ServerInfoCubit, ServerInfoState>(
+          builder: (context, state) {
+            final label = switch (state) {
+              ServerInfoLoaded(:final servers) when servers.isNotEmpty => [
+                  servers.first.name,
+                  if (servers.first.countryCode != null)
+                    servers.first.countryCode!,
+                ].join(' · '),
+              ServerInfoLoading() => 'Loading server…',
+              ServerInfoError() => 'Server unavailable',
+              _ => 'PetrikVPN',
+            };
+            return Text(
+              label,
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            );
+          },
+        );
+      },
+    );
   }
+}
 
-  static String formatHandshake(DateTime? at, DateTime now) {
-    if (at == null) {
-      return 'Waiting…';
-    }
-    final seconds = now.difference(at.toLocal()).inSeconds;
-    if (seconds < 0) {
-      return 'just now';
-    }
-    if (seconds < 60) {
-      return '${seconds}s ago';
-    }
-    if (seconds < 3600) {
-      return '${seconds ~/ 60}m ago';
-    }
-    if (seconds < 86400) {
-      return '${seconds ~/ 3600}h ago';
-    }
-    return '${seconds ~/ 86400}d ago';
-  }
+class _StatusBlock extends StatelessWidget {
+  const _StatusBlock({required this.connect});
+
+  final VpnConnectState connect;
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall;
-    final now = DateTime.now();
+    final theme = Theme.of(context);
+    final connected = connect.isConnected;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (rxBytes != null || txBytes != null)
-          Text(
-            '↓ ${formatBytes(rxBytes ?? 0)}   ↑ ${formatBytes(txBytes ?? 0)}',
-            style: style,
+        Text(
+          connect.stepLabel,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: connected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
           ),
-        if (lastHandshakeAt != null || rxBytes != null) ...[
-          const SizedBox(height: 4),
+          textAlign: TextAlign.center,
+        ),
+        if (connected) ...[
+          const SizedBox(height: 8),
           Text(
-            'Last handshake: ${formatHandshake(lastHandshakeAt, now)}',
-            style: style,
+            VpnStatsFormat.duration(connect.sessionSeconds),
+            style: theme.textTheme.displaySmall?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SessionStats extends StatelessWidget {
+  const _SessionStats({required this.connect});
+
+  final VpnConnectState connect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyLarge;
+    return Column(
+      children: [
+        Text(
+          '↓ ${VpnStatsFormat.bytes(connect.rxBytes ?? 0)}'
+          '    ↑ ${VpnStatsFormat.bytes(connect.txBytes ?? 0)}',
+          style: style,
+          textAlign: TextAlign.center,
+        ),
+        if (connect.lastHandshakeAt != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Handshake ${VpnStatsFormat.handshakeAgo(connect.lastHandshakeAt, DateTime.now())}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ],
@@ -262,6 +274,7 @@ class _ConnectLogPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
@@ -275,24 +288,29 @@ class _ConnectLogPanel extends StatelessWidget {
             TextButton.icon(
               onPressed: () => _copy(context),
               icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy all'),
+              label: const Text('Copy'),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).dividerColor),
-            borderRadius: BorderRadius.circular(8),
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.5,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: SelectableText(
-              _plainText,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 11,
-                height: 1.45,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: Theme.of(context).dividerColor),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: SelectableText(
+                _plainText,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  height: 1.45,
+                ),
               ),
             ),
           ),

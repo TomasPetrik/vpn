@@ -16,7 +16,7 @@ Last updated: 2026-11-17
 3. **Android** — VpnService + wireguard-go + wstunnel client (binary or FFI); end-to-end same as iOS.
 4. ~~**Stability tests**~~ — sleep 6h, Wi‑Fi gap 15m, airplane, force-quit; cellular handoff still open when roaming OK.
 5. ~~**Admin traffic counters**~~ — fixed: vpn-api syncs `wg` peer RX/TX + handshake into MySQL every 15s and on device detail load.
-6. ~~**Connect UI handshake / RX/TX**~~ — PacketTunnel runtime stats polled into Home while connected.
+6. ~~**Connect UI handshake / RX/TX**~~ — session stats on Home (1s poll) + overall Statistics screen.
 
 ## Nice-to-have
 

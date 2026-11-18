@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../device/domain/device_repository.dart';
 import '../../device/domain/vpn_peer_config.dart';
 import '../domain/vpn_engine.dart';
+import '../domain/vpn_usage_stats.dart';
 
 enum VpnConnectPhase {
   idle,
@@ -39,6 +40,9 @@ class VpnConnectState {
     this.rxBytes,
     this.txBytes,
     this.lastHandshakeAt,
+    this.sessionStartedAt,
+    this.sessionSeconds = 0,
+    this.committedTotals = const VpnUsageTotals.zero(),
   });
 
   final VpnConnectPhase phase;
@@ -49,6 +53,9 @@ class VpnConnectState {
   final int? rxBytes;
   final int? txBytes;
   final DateTime? lastHandshakeAt;
+  final DateTime? sessionStartedAt;
+  final int sessionSeconds;
+  final VpnUsageTotals committedTotals;
 
   bool get isBusy =>
       phase == VpnConnectPhase.checkingSession ||
@@ -59,18 +66,24 @@ class VpnConnectState {
       phase == VpnConnectPhase.startingTunnel ||
       phase == VpnConnectPhase.disconnecting;
 
-  bool get canConnect =>
-      phase == VpnConnectPhase.idle ||
-      phase == VpnConnectPhase.skeletonConnected ||
-      phase == VpnConnectPhase.error;
+  bool get isConnected => phase == VpnConnectPhase.skeletonConnected;
 
-  bool get canReset =>
-      phase == VpnConnectPhase.skeletonConnected ||
-      phase == VpnConnectPhase.error;
+  bool get canConnect =>
+      phase == VpnConnectPhase.idle || phase == VpnConnectPhase.error;
 
   bool get canDisconnect => phase == VpnConnectPhase.skeletonConnected;
 
-  bool get hasTrafficStats => rxBytes != null || txBytes != null;
+  bool get hasSessionStats =>
+      isConnected && (rxBytes != null || txBytes != null || sessionStartedAt != null);
+
+  VpnUsageTotals get overallTotals {
+    final session = VpnUsageTotals(
+      rxBytes: rxBytes ?? 0,
+      txBytes: txBytes ?? 0,
+      activeSeconds: sessionSeconds,
+    );
+    return isConnected ? committedTotals + session : committedTotals;
+  }
 
   VpnConnectState copyWith({
     VpnConnectPhase? phase,
@@ -81,9 +94,13 @@ class VpnConnectState {
     int? rxBytes,
     int? txBytes,
     DateTime? lastHandshakeAt,
+    DateTime? sessionStartedAt,
+    int? sessionSeconds,
+    VpnUsageTotals? committedTotals,
     bool clearError = false,
     bool clearPeer = false,
     bool clearTraffic = false,
+    bool clearSession = false,
   }) {
     return VpnConnectState(
       phase: phase ?? this.phase,
@@ -95,13 +112,19 @@ class VpnConnectState {
       txBytes: clearTraffic ? null : (txBytes ?? this.txBytes),
       lastHandshakeAt:
           clearTraffic ? null : (lastHandshakeAt ?? this.lastHandshakeAt),
+      sessionStartedAt:
+          clearSession ? null : (sessionStartedAt ?? this.sessionStartedAt),
+      sessionSeconds: clearSession ? 0 : (sessionSeconds ?? this.sessionSeconds),
+      committedTotals: committedTotals ?? this.committedTotals,
     );
   }
 
-  static VpnConnectState initial() => const VpnConnectState(
+  static VpnConnectState initial({VpnUsageTotals? committedTotals}) =>
+      VpnConnectState(
         phase: VpnConnectPhase.idle,
-        stepLabel: 'Ready to connect',
-        log: [],
+        stepLabel: 'Not connected',
+        log: const [],
+        committedTotals: committedTotals ?? const VpnUsageTotals.zero(),
       );
 }
 
@@ -109,16 +132,22 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   VpnConnectCubit({
     required DeviceRepository deviceRepository,
     required VpnEngine vpnEngine,
+    required VpnUsageStatsStore usageStatsStore,
   })  : _deviceRepository = deviceRepository,
         _vpnEngine = vpnEngine,
+        _usageStatsStore = usageStatsStore,
         super(VpnConnectState.initial()) {
     _statusSub = _vpnEngine.statusStream().listen(_onStatus);
+    unawaited(_bootstrapUsage());
   }
 
   final DeviceRepository _deviceRepository;
   final VpnEngine _vpnEngine;
+  final VpnUsageStatsStore _usageStatsStore;
   StreamSubscription<VpnStatusSnapshot>? _statusSub;
   Timer? _statsTimer;
+  String? _lastStatusKey;
+  bool _committingSession = false;
 
   @override
   Future<void> close() async {
@@ -127,11 +156,38 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     return super.close();
   }
 
-  String? _lastStatusKey;
+  Future<void> refreshCommittedTotals() async {
+    final totals = await _usageStatsStore.readCommitted();
+    if (isClosed) {
+      return;
+    }
+    emit(state.copyWith(committedTotals: totals));
+  }
+
+  Future<void> _bootstrapUsage() async {
+    final totals = await _usageStatsStore.recoverInflightIfNeeded();
+    if (isClosed) {
+      return;
+    }
+    final current = state.committedTotals;
+    if (totals.rxBytes == current.rxBytes &&
+        totals.txBytes == current.txBytes &&
+        totals.activeSeconds == current.activeSeconds) {
+      return;
+    }
+    emit(state.copyWith(committedTotals: totals));
+  }
+
+  void _markSessionStarted({DateTime? at}) {
+    if (state.sessionStartedAt != null) {
+      return;
+    }
+    emit(state.copyWith(sessionStartedAt: at ?? DateTime.now(), sessionSeconds: 0));
+  }
 
   void _startStatsPolling() {
     _statsTimer?.cancel();
-    _statsTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       unawaited(_refreshTrafficStats());
     });
     unawaited(_refreshTrafficStats());
@@ -151,16 +207,20 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       if (isClosed || state.phase != VpnConnectPhase.skeletonConnected) {
         return;
       }
-      _applyTraffic(snap);
+      await _applyTraffic(snap);
     } catch (_) {
       // Ignore transient channel errors while polling.
     }
   }
 
-  void _applyTraffic(VpnStatusSnapshot snap) {
+  Future<void> _applyTraffic(VpnStatusSnapshot snap) async {
+    _markSessionStarted();
+    final started = state.sessionStartedAt ?? DateTime.now();
+    final elapsed = DateTime.now().difference(started).inSeconds;
     final same = state.rxBytes == snap.rxBytes &&
         state.txBytes == snap.txBytes &&
-        state.lastHandshakeAt == snap.lastHandshakeAt;
+        state.lastHandshakeAt == snap.lastHandshakeAt &&
+        state.sessionSeconds == elapsed;
     if (same) {
       return;
     }
@@ -169,8 +229,38 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         rxBytes: snap.rxBytes,
         txBytes: snap.txBytes,
         lastHandshakeAt: snap.lastHandshakeAt,
+        sessionStartedAt: started,
+        sessionSeconds: elapsed,
       ),
     );
+    await _usageStatsStore.writeInflight(
+      rxBytes: snap.rxBytes ?? state.rxBytes ?? 0,
+      txBytes: snap.txBytes ?? state.txBytes ?? 0,
+      activeSeconds: elapsed,
+    );
+  }
+
+  Future<void> _commitCurrentSession() async {
+    if (_committingSession || state.sessionStartedAt == null) {
+      return;
+    }
+    _committingSession = true;
+    try {
+      final seconds = state.sessionSeconds > 0
+          ? state.sessionSeconds
+          : DateTime.now().difference(state.sessionStartedAt!).inSeconds;
+      await _usageStatsStore.commitSession(
+        rxBytes: state.rxBytes ?? 0,
+        txBytes: state.txBytes ?? 0,
+        activeSeconds: seconds,
+      );
+      final totals = await _usageStatsStore.readCommitted();
+      if (!isClosed) {
+        emit(state.copyWith(committedTotals: totals));
+      }
+    } finally {
+      _committingSession = false;
+    }
   }
 
   void _onStatus(VpnStatusSnapshot snap) {
@@ -181,7 +271,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     final key = '${snap.status}|${snap.extensionStatus}';
     if (key == _lastStatusKey) {
       if (state.phase == VpnConnectPhase.skeletonConnected) {
-        _applyTraffic(snap);
+        unawaited(_applyTraffic(snap));
       }
       return;
     }
@@ -197,14 +287,16 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     if (snap.status == 'connected' ||
         snap.extensionStatus == 'wireguard_started' ||
         snap.extensionStatus == 'skeleton_connected') {
+      final started = state.sessionStartedAt ?? DateTime.now();
       emit(
         state.copyWith(
           phase: VpnConnectPhase.skeletonConnected,
-          stepLabel: 'Connected (WireGuard + wstunnel)',
+          stepLabel: 'Connected',
           log: List.unmodifiable(lines),
           rxBytes: snap.rxBytes,
           txBytes: snap.txBytes,
           lastHandshakeAt: snap.lastHandshakeAt,
+          sessionStartedAt: started,
           clearError: true,
         ),
       );
@@ -212,21 +304,28 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     } else if (snap.status == 'disconnected' &&
         state.phase == VpnConnectPhase.skeletonConnected) {
       _stopStatsPolling();
-      emit(
-        state.copyWith(
-          phase: VpnConnectPhase.idle,
-          stepLabel: 'Disconnected',
-          log: List.unmodifiable(lines),
-          clearTraffic: true,
-        ),
-      );
+      unawaited(() async {
+        await _commitCurrentSession();
+        if (isClosed) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            phase: VpnConnectPhase.idle,
+            stepLabel: 'Not connected',
+            log: List.unmodifiable(lines),
+            clearTraffic: true,
+            clearSession: true,
+          ),
+        );
+      }());
     } else {
       emit(state.copyWith(log: List.unmodifiable(lines)));
     }
   }
 
   Future<void> connect() async {
-    if (state.isBusy) {
+    if (state.isBusy || state.isConnected) {
       return;
     }
     _lastStatusKey = null;
@@ -245,6 +344,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
           log: List.unmodifiable(lines),
           clearError: true,
           clearTraffic: true,
+          clearSession: true,
         ),
       );
     }
@@ -256,19 +356,19 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       final session = await _deviceRepository.me();
       log('Session OK — user ${session.userId}, device ${session.deviceId}');
 
-      emitPhase(VpnConnectPhase.ensuringKeys, 'Preparing WireGuard keys…');
+      emitPhase(VpnConnectPhase.ensuringKeys, 'Preparing keys…');
       log('vpn_engine.getPublicKey — native Keychain');
       final publicKey = await _vpnEngine.getPublicKey();
       log('Public key ready (${publicKey.substring(0, 8)}…)');
 
-      emitPhase(VpnConnectPhase.provisioningPeer, 'Provisioning peer…');
+      emitPhase(VpnConnectPhase.provisioningPeer, 'Provisioning…');
       log('PUT /devices/me/peer — registering public key');
       final peer = await _deviceRepository.upsertPeer(publicKey: publicKey);
       log(
         'Peer OK — ${peer.server.name} · ${peer.interfaceAddresses.join(', ')}',
       );
 
-      emitPhase(VpnConnectPhase.preparingVpn, 'VPN permission…');
+      emitPhase(VpnConnectPhase.preparingVpn, 'Requesting VPN permission…');
       log('vpn_engine.prepare — requesting OS VPN configuration');
       final prepared = await _vpnEngine.prepare();
       log('prepare → ${prepared.status}: ${prepared.message}');
@@ -282,7 +382,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         '${peer.transport.url}/${peer.transport.pathPrefix}',
       );
 
-      emitPhase(VpnConnectPhase.startingTunnel, 'Starting WireGuard…');
+      emitPhase(VpnConnectPhase.startingTunnel, 'Connecting…');
       log('vpn_engine.startTunnel — wstunnel + WireGuardKit');
       final tunnelConfig = <String, Object?>{
         'addresses': peer.interfaceAddresses,
@@ -305,7 +405,6 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         throw StateError('startTunnel failed: ${started.message}');
       }
 
-      // Poll briefly for extension status / connected.
       for (var i = 0; i < 12; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 400));
         final snap = await _vpnEngine.getStatus();
@@ -318,15 +417,18 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
           for (final line in snap.extensionLog) {
             log('ext: $line');
           }
+          final sessionStart = DateTime.now();
           emit(
             state.copyWith(
               phase: VpnConnectPhase.skeletonConnected,
-              stepLabel: 'Connected (WireGuard + wstunnel)',
+              stepLabel: 'Connected',
               log: List.unmodifiable(lines),
               peer: peer,
               rxBytes: snap.rxBytes,
               txBytes: snap.txBytes,
               lastHandshakeAt: snap.lastHandshakeAt,
+              sessionStartedAt: sessionStart,
+              sessionSeconds: 0,
               clearError: true,
             ),
           );
@@ -341,9 +443,11 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       emit(
         state.copyWith(
           phase: VpnConnectPhase.skeletonConnected,
-          stepLabel: 'WireGuard start requested — check OS VPN / logs',
+          stepLabel: 'Connected',
           log: List.unmodifiable(lines),
           peer: peer,
+          sessionStartedAt: DateTime.now(),
+          sessionSeconds: 0,
           clearError: true,
         ),
       );
@@ -354,10 +458,11 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       emit(
         state.copyWith(
           phase: VpnConnectPhase.error,
-          stepLabel: 'Connect failed',
+          stepLabel: 'Connection failed',
           log: List.unmodifiable(lines),
           errorMessage: e.toString(),
           clearTraffic: true,
+          clearSession: true,
         ),
       );
     }
@@ -380,29 +485,19 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         log: List.unmodifiable(lines),
       ),
     );
+    await _commitCurrentSession();
     log('vpn_engine.stopTunnel');
     final stopped = await _vpnEngine.stopTunnel();
     log('stopTunnel → ${stopped.message}');
     emit(
       state.copyWith(
         phase: VpnConnectPhase.idle,
-        stepLabel: 'Disconnected',
+        stepLabel: 'Not connected',
         log: List.unmodifiable(lines),
         clearPeer: true,
         clearTraffic: true,
+        clearSession: true,
       ),
     );
-  }
-
-  Future<void> reset() async {
-    if (state.isBusy) {
-      return;
-    }
-    if (state.canDisconnect) {
-      await disconnect();
-    }
-    _lastStatusKey = null;
-    _stopStatsPolling();
-    emit(VpnConnectState.initial());
   }
 }

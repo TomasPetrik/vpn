@@ -13,6 +13,7 @@ import '../features/device/presentation/splash_page.dart';
 import '../features/servers/presentation/server_info_cubit.dart';
 import '../features/vpn/presentation/home_page.dart';
 import '../features/vpn/presentation/vpn_connect_cubit.dart';
+import '../features/vpn/presentation/vpn_stats_page.dart';
 
 GoRouter createRouter({
   required AppUpdateCubit appUpdateCubit,
@@ -57,6 +58,13 @@ GoRouter createRouter({
             BlocProvider.value(value: getIt<VpnConnectCubit>()),
           ],
           child: const HomePage(),
+        ),
+      ),
+      GoRoute(
+        path: '/stats',
+        builder: (context, state) => BlocProvider.value(
+          value: getIt<VpnConnectCubit>(),
+          child: const VpnStatsPage(),
         ),
       ),
       GoRoute(

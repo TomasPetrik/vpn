@@ -17,7 +17,9 @@ import '../../features/servers/data/servers_repository_impl.dart';
 import '../../features/servers/domain/servers_repository.dart';
 import '../../features/servers/presentation/server_info_cubit.dart';
 import '../../features/vpn/data/method_channel_vpn_engine.dart';
+import '../../features/vpn/data/vpn_usage_stats_store.dart';
 import '../../features/vpn/domain/vpn_engine.dart';
+import '../../features/vpn/domain/vpn_usage_stats.dart';
 import '../../features/vpn/presentation/vpn_connect_cubit.dart';
 import '../config/app_config.dart';
 import '../network/api_failure.dart';
@@ -86,12 +88,16 @@ Future<void> configureDependencies() async {
   getIt
     ..registerSingleton(appUpdateCubit)
     ..registerSingleton<VpnEngine>(MethodChannelVpnEngine())
+    ..registerSingleton<VpnUsageStatsStore>(
+      SharedPrefsVpnUsageStatsStore(prefs),
+    )
     ..registerFactory(() => BootstrapCubit(getIt()))
     ..registerLazySingleton(() => ServerInfoCubit(getIt()))
     ..registerLazySingleton(
       () => VpnConnectCubit(
         deviceRepository: getIt(),
         vpnEngine: getIt(),
+        usageStatsStore: getIt(),
       ),
     );
 }
