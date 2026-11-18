@@ -110,4 +110,50 @@ void main() {
           .having((s) => s.log, 'log', isNotEmpty),
     ],
   );
+
+  blocTest<VpnConnectCubit, VpnConnectState>(
+    'connect stores WireGuard rx/tx and handshake from status',
+    build: () {
+      when(() => engine.getStatus()).thenAnswer(
+        (_) async => VpnStatusSnapshot(
+          status: 'connected',
+          extensionStatus: 'wireguard_started',
+          extensionLog: const [],
+          rxBytes: 1500,
+          txBytes: 800,
+          lastHandshakeAt: DateTime.utc(2026, 11, 18, 3, 0, 0),
+        ),
+      );
+      return VpnConnectCubit(deviceRepository: repo, vpnEngine: engine);
+    },
+    act: (cubit) => cubit.connect(),
+    wait: const Duration(milliseconds: 500),
+    verify: (cubit) {
+      expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
+      expect(cubit.state.rxBytes, 1500);
+      expect(cubit.state.txBytes, 800);
+      expect(
+        cubit.state.lastHandshakeAt,
+        DateTime.utc(2026, 11, 18, 3, 0, 0),
+      );
+    },
+  );
+
+  test('VpnStatusSnapshot parses UAPI counters', () {
+    final snap = VpnStatusSnapshot.fromMap({
+      'status': 'connected',
+      'extension_status': 'wireguard_started',
+      'extension_log': <String>[],
+      'rx_bytes': 2048,
+      'tx_bytes': 1024,
+      'last_handshake_sec': 1700000000,
+    });
+    expect(snap.rxBytes, 2048);
+    expect(snap.txBytes, 1024);
+    expect(
+      snap.lastHandshakeAt,
+      DateTime.fromMillisecondsSinceEpoch(1700000000 * 1000, isUtc: true),
+    );
+  });
 }
+

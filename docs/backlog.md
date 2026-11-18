@@ -12,12 +12,13 @@ Last updated: 2026-11-17
 ## Open
 
 1. ~~**TLS verify on iOS**~~ — webpki-roots in vendored wstunnel; `tls_verify_certificate: true` (device verify: prod connect OK + bad SNI fails).
-2. **PacketTunnel memory** — formal measurement under load vs ~50 MB jetsam budget (Instruments / on-device).
+2. ~~**PacketTunnel memory**~~ — ~8 MB peak after 500 MB download (Profile); well under ~50 MB jetsam.
 3. **Android** — VpnService + wireguard-go + wstunnel client (binary or FFI); end-to-end same as iOS.
-4. **Stability tests** — Wi‑Fi ↔ cellular handoff, 30+ min idle, reconnect after sleep; document results.
+4. ~~**Stability tests**~~ — sleep 6h, Wi‑Fi gap 15m, airplane, force-quit; cellular handoff still open when roaming OK.
 5. ~~**Admin traffic counters**~~ — fixed: vpn-api syncs `wg` peer RX/TX + handshake into MySQL every 15s and on device detail load.
+6. ~~**Connect UI handshake / RX/TX**~~ — PacketTunnel runtime stats polled into Home while connected.
 
 ## Nice-to-have
 
-- Surface last handshake / transfer in the app Connect UI
+- Soft update banner CTA (Store link / dismiss)
 - Sim slice for WstunnelFFI XCFramework (device-only today)

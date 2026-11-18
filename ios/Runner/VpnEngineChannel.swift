@@ -339,37 +339,95 @@ final class VpnEngineChannel: NSObject, FlutterStreamHandler {
     forceLoad: Bool,
     completion: @escaping ([String: Any]) -> Void
   ) {
-    let finish: (String) -> Void = { vpnStatus in
+    let finish: (NETunnelProviderManager?, String) -> Void = { manager, vpnStatus in
       let defaults = UserDefaults(suiteName: Self.appGroupId)
       let extensionStatus = defaults?.string(forKey: "tunnel_status") ?? ""
-      completion([
+      var payload: [String: Any] = [
         "status": vpnStatus,
         "extension_status": extensionStatus,
         "extension_log": Self.extensionLogLines(),
-      ])
+      ]
+      Self.fetchRuntimeStats(from: manager) { stats in
+        for (key, value) in stats {
+          payload[key] = value
+        }
+        completion(payload)
+      }
     }
 
-    if let connection {
-      finish(Self.statusString(connection.status))
-      return
-    }
     if let cachedManager {
-      finish(Self.statusString(cachedManager.connection.status))
+      let status = connection.map { Self.statusString($0.status) }
+        ?? Self.statusString(cachedManager.connection.status)
+      finish(cachedManager, status)
       return
     }
     guard forceLoad else {
-      finish("disconnected")
+      finish(nil, "disconnected")
       return
     }
     NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
       if let manager = managers?.first {
         self?.cachedManager = manager
         self?.attachStatusObserver(to: manager.connection)
-        finish(Self.statusString(manager.connection.status))
+        finish(manager, Self.statusString(manager.connection.status))
       } else {
-        finish("disconnected")
+        finish(nil, "disconnected")
       }
     }
+  }
+
+  /// Asks PacketTunnel for WireGuard UAPI runtime config and parses peer counters.
+  private static func fetchRuntimeStats(
+    from manager: NETunnelProviderManager?,
+    completion: @escaping ([String: Any]) -> Void
+  ) {
+    guard let manager,
+          manager.connection.status == .connected,
+          let session = manager.connection as? NETunnelProviderSession
+    else {
+      completion([:])
+      return
+    }
+    do {
+      try session.sendProviderMessage(Data([0])) { data in
+        guard let data, let text = String(data: data, encoding: .utf8) else {
+          completion([:])
+          return
+        }
+        completion(parseRuntimeConfig(text))
+      }
+    } catch {
+      completion([:])
+    }
+  }
+
+  private static func parseRuntimeConfig(_ text: String) -> [String: Any] {
+    var rxBytes: Int64?
+    var txBytes: Int64?
+    var handshakeSec: Int64?
+    for rawLine in text.split(whereSeparator: \.isNewline) {
+      let line = String(rawLine)
+      guard let eq = line.firstIndex(of: "=") else { continue }
+      let key = String(line[..<eq])
+      let value = String(line[line.index(after: eq)...])
+      switch key {
+      case "rx_bytes":
+        rxBytes = Int64(value)
+      case "tx_bytes":
+        txBytes = Int64(value)
+      case "last_handshake_time_sec":
+        handshakeSec = Int64(value)
+      default:
+        break
+      }
+    }
+    var out: [String: Any] = [:]
+    if let rxBytes { out["rx_bytes"] = NSNumber(value: rxBytes) }
+    if let txBytes { out["tx_bytes"] = NSNumber(value: txBytes) }
+    if let handshakeSec, handshakeSec > 0 {
+      out["last_handshake_sec"] = NSNumber(value: handshakeSec)
+    }
+    return out
   }
 
   private static func extensionLogLines() -> [String] {

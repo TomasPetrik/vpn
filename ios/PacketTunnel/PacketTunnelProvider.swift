@@ -101,13 +101,26 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
   }
 
   override func handleAppMessage(_ messageData: Data, completionHandler: ((Data?) -> Void)?) {
-    let text = String(data: messageData, encoding: .utf8) ?? ""
-    appendLog("appMessage: \(text)")
-    if text == "ping" {
-      completionHandler?("pong".data(using: .utf8))
+    guard let completionHandler else { return }
+
+    // WireGuard Apple convention: single 0 byte → runtime UAPI config (rx/tx/handshake).
+    if messageData.count == 1, messageData[0] == 0 {
+      guard let adapter else {
+        completionHandler(nil)
+        return
+      }
+      adapter.getRuntimeConfiguration { settings in
+        completionHandler(settings?.data(using: .utf8))
+      }
       return
     }
-    completionHandler?(nil)
+
+    let text = String(data: messageData, encoding: .utf8) ?? ""
+    if text == "ping" {
+      completionHandler("pong".data(using: .utf8))
+      return
+    }
+    completionHandler(nil)
   }
 
   // MARK: - wstunnel

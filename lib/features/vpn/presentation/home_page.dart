@@ -116,6 +116,16 @@ class HomePage extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
+                  if (connect.phase == VpnConnectPhase.skeletonConnected &&
+                      (connect.hasTrafficStats ||
+                          connect.lastHandshakeAt != null)) ...[
+                    const SizedBox(height: 12),
+                    _TunnelStatsPanel(
+                      rxBytes: connect.rxBytes,
+                      txBytes: connect.txBytes,
+                      lastHandshakeAt: connect.lastHandshakeAt,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: connect.canConnect
@@ -153,6 +163,73 @@ class HomePage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TunnelStatsPanel extends StatelessWidget {
+  const _TunnelStatsPanel({
+    required this.rxBytes,
+    required this.txBytes,
+    required this.lastHandshakeAt,
+  });
+
+  final int? rxBytes;
+  final int? txBytes;
+  final DateTime? lastHandshakeAt;
+
+  static String formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = bytes.toDouble();
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    final digits = value >= 100 || unit == 0 ? 0 : (value >= 10 ? 1 : 2);
+    return '${value.toStringAsFixed(digits)} ${units[unit]}';
+  }
+
+  static String formatHandshake(DateTime? at, DateTime now) {
+    if (at == null) {
+      return 'Waiting…';
+    }
+    final seconds = now.difference(at.toLocal()).inSeconds;
+    if (seconds < 0) {
+      return 'just now';
+    }
+    if (seconds < 60) {
+      return '${seconds}s ago';
+    }
+    if (seconds < 3600) {
+      return '${seconds ~/ 60}m ago';
+    }
+    if (seconds < 86400) {
+      return '${seconds ~/ 3600}h ago';
+    }
+    return '${seconds ~/ 86400}d ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final now = DateTime.now();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (rxBytes != null || txBytes != null)
+          Text(
+            '↓ ${formatBytes(rxBytes ?? 0)}   ↑ ${formatBytes(txBytes ?? 0)}',
+            style: style,
+          ),
+        if (lastHandshakeAt != null || rxBytes != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Last handshake: ${formatHandshake(lastHandshakeAt, now)}',
+            style: style,
+          ),
+        ],
+      ],
     );
   }
 }
