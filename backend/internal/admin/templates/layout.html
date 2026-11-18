@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PetrikVPN Admin</title>
+  <link rel="icon" href="/admin/static/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/static/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/admin/static/favicon-16.png">
+  <link rel="apple-touch-icon" href="/admin/static/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -91,9 +95,10 @@
       letter-spacing: -0.02em;
     }
     .brand-mark {
-      width: 1.25rem;
-      height: 1.25rem;
-      color: var(--primary);
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: .35rem;
+      object-fit: cover;
       flex-shrink: 0;
     }
     .nav-group {
@@ -563,10 +568,7 @@
   <aside class="sidebar">
     <div class="sidebar-inner" id="desktop-nav">
       <a class="brand" href="/admin">
-        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-          <circle cx="12" cy="12" r="4" fill="currentColor"/>
-        </svg>
+        <img class="brand-mark" src="/admin/static/logo-64.png" width="24" height="24" alt="">
         PetrikVPN Admin
       </a>
       <nav class="nav" id="admin-nav">

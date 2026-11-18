@@ -174,6 +174,8 @@ func runServe(log *slog.Logger) error {
 	mux.Handle("PUT /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Upsert)))
 	mux.Handle("GET /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Get)))
 
+	mux.Handle("GET /admin/static/", admin.StaticHandler())
+
 	loginLimit := httpapi.NewIPRateLimiter(10, time.Minute)
 	mux.Handle("GET /admin/login", http.HandlerFunc(adminH.LoginForm))
 	mux.Handle("POST /admin/login", loginLimit.Middleware(http.HandlerFunc(adminH.LoginSubmit)))

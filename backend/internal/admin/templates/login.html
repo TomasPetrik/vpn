@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin sign in | PetrikVPN</title>
+  <link rel="icon" href="/admin/static/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/admin/static/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/admin/static/favicon-16.png">
+  <link rel="apple-touch-icon" href="/admin/static/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -67,7 +71,12 @@
       font-weight: 700;
       letter-spacing: -0.02em;
     }
-    .brand-mark { width: 1.5rem; height: 1.5rem; color: var(--primary); }
+    .brand-mark {
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: .4rem;
+      object-fit: cover;
+    }
     h1 {
       margin: 0;
       font-family: var(--font-heading);
@@ -120,10 +129,7 @@
   <div class="card">
     <div class="header">
       <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-          <circle cx="12" cy="12" r="4" fill="currentColor"/>
-        </svg>
+        <img class="brand-mark" src="/admin/static/logo-64.png" width="28" height="28" alt="">
         PetrikVPN Admin
       </div>
       <h1>Sign in</h1>
