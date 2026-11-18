@@ -154,15 +154,10 @@ class _HubHeader extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
         child: Row(
           children: [
-            Image.asset(
-              'assets/branding/header_mark.png',
-              height: 32,
-              width: 32,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.shield,
-                color: CyberShieldColors.secondaryContainer,
-              ),
+            const Icon(
+              Icons.shield_outlined,
+              size: 28,
+              color: CyberShieldColors.secondaryContainer,
             ),
             const SizedBox(width: 8),
             Text(
@@ -181,7 +176,7 @@ class _HubHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                'PRO',
+                'FREE',
                 style: CyberShieldTheme.labelBadge(
                   color: CyberShieldColors.secondaryContainer,
                 ),
@@ -189,20 +184,6 @@ class _HubHeader extends StatelessWidget {
             ),
             const Spacer(),
             _HeaderStatusChip(visual: visual),
-            const SizedBox(width: 8),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                color: CyberShieldColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person,
-                size: 18,
-                color: CyberShieldColors.onPrimary,
-              ),
-            ),
           ],
         ),
       ),
@@ -441,6 +422,14 @@ class _RegionQuickSelect extends StatelessWidget {
   final VpnConnectState connect;
   final _HubVisualState visual;
 
+  static const _fallbackGermany = VpnServer(
+    id: 'de',
+    name: 'Germany',
+    countryCode: 'DE',
+    city: 'Frankfurt',
+    status: 'online',
+  );
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ServerInfoCubit, ServerInfoState>(
@@ -449,55 +438,199 @@ class _RegionQuickSelect extends StatelessWidget {
           ServerInfoLoaded(:final servers) => servers,
           _ => const <VpnServer>[],
         };
-        final active = connect.peer?.server ??
-            (servers.isNotEmpty ? servers.first : null);
-        final second = servers.length > 1
-            ? servers.firstWhere(
-                (s) => s.id != active?.id,
-                orElse: () => servers[1],
-              )
-            : null;
+        VpnServer? fromApi;
+        for (final server in servers) {
+          if (server.countryCode?.toUpperCase() == 'DE') {
+            fromApi = server;
+            break;
+          }
+        }
+        fromApi ??= servers.isNotEmpty ? servers.first : null;
+        final active = connect.peer?.server ?? fromApi ?? _fallbackGermany;
 
         final border = visual == _HubVisualState.connecting
             ? CyberShieldColors.secondaryContainer.withValues(alpha: 0.3)
             : CyberShieldColors.outlineVariant.withValues(alpha: 0.4);
 
-        return Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: CyberShieldColors.surfaceContainerLowest.withValues(
-              alpha: 0.9,
-            ),
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _RegionChip(
-                  server: active,
-                  selected: true,
-                  visual: visual,
-                  fallbackName: 'Germany',
-                  fallbackCity: 'Frankfurt',
-                  fallbackCode: 'DE',
+            onTap: () => _showServerPicker(
+              context,
+              servers: servers.isEmpty ? const [_fallbackGermany] : servers,
+              selectedId: active.id,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: CyberShieldColors.surfaceContainerLowest.withValues(
+                  alpha: 0.9,
                 ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: border),
               ),
-              Expanded(
-                child: _RegionChip(
-                  server: second,
-                  selected: false,
-                  visual: visual,
-                  fallbackName: 'Russia',
-                  fallbackCity: 'Moscow',
-                  fallbackCode: 'RU',
-                  dimmed: visual == _HubVisualState.connecting,
-                ),
+              child: _RegionChip(
+                server: active,
+                visual: visual,
               ),
-            ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  static Future<void> _showServerPicker(
+    BuildContext context, {
+    required List<VpnServer> servers,
+    required String selectedId,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: CyberShieldColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: CyberShieldColors.outlineVariant
+                          .withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Available servers',
+                  style: CyberShieldTheme.headlineSm(),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: servers.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final server = servers[index];
+                      final available = _isServerAvailable(server);
+                      final selected = server.id == selectedId;
+                      return _ServerPickerTile(
+                        server: server,
+                        selected: selected,
+                        available: available,
+                        onTap: available
+                            ? () => Navigator.of(context).pop()
+                            : null,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static bool _isServerAvailable(VpnServer server) {
+    return server.countryCode?.toUpperCase() == 'DE' &&
+        server.status.toLowerCase() != 'offline';
+  }
+}
+
+class _ServerPickerTile extends StatelessWidget {
+  const _ServerPickerTile({
+    required this.server,
+    required this.selected,
+    required this.available,
+    required this.onTap,
+  });
+
+  final VpnServer server;
+  final bool selected;
+  final bool available;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = server.countryCode?.toUpperCase() ?? '';
+    final city = server.city ?? server.name;
+
+    return Opacity(
+      opacity: available ? 1 : 0.45,
+      child: Material(
+        color: selected
+            ? CyberShieldColors.surfaceContainerHigh
+            : CyberShieldColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  countryFlagEmoji(server.countryCode),
+                  style: const TextStyle(fontSize: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        code.isEmpty ? server.name : _countryName(code),
+                        style: CyberShieldTheme.labelBadge(
+                          color: CyberShieldColors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        available ? city : '$city · Unavailable',
+                        style: CyberShieldTheme.labelCode(
+                          color: available
+                              ? CyberShieldColors.secondaryContainer
+                              : CyberShieldColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected && available)
+                  const Icon(
+                    Icons.check_circle,
+                    size: 20,
+                    color: CyberShieldColors.tertiary,
+                  )
+                else if (!available)
+                  Text(
+                    'Soon',
+                    style: CyberShieldTheme.labelBadge(
+                      color: CyberShieldColors.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -505,113 +638,92 @@ class _RegionQuickSelect extends StatelessWidget {
 class _RegionChip extends StatelessWidget {
   const _RegionChip({
     required this.server,
-    required this.selected,
     required this.visual,
-    required this.fallbackName,
-    required this.fallbackCity,
-    required this.fallbackCode,
-    this.dimmed = false,
   });
 
-  final VpnServer? server;
-  final bool selected;
+  final VpnServer server;
   final _HubVisualState visual;
-  final String fallbackName;
-  final String fallbackCity;
-  final String fallbackCode;
-  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
-    final code = server?.countryCode ?? fallbackCode;
-    final title = (server?.countryCode ?? fallbackName).toUpperCase();
-    final city = server?.city ?? server?.name ?? fallbackCity;
+    final code = (server.countryCode ?? 'DE').toUpperCase();
+    final city = server.city ?? server.name;
 
-    final trailing = !selected
-        ? null
-        : switch (visual) {
-            _HubVisualState.connecting => Icon(
-                Icons.sync,
-                size: 16,
-                color: CyberShieldColors.secondaryContainer,
-              ),
-            _HubVisualState.connected ||
-            _HubVisualState.disconnected =>
-              const Icon(
-                Icons.check,
-                size: 16,
-                color: CyberShieldColors.tertiary,
-              ),
-          };
-
-    return Opacity(
-      opacity: dimmed ? 0.6 : 1,
-      child: Container(
-        margin: const EdgeInsets.all(2),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? CyberShieldColors.surfaceContainerHigh
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: selected && visual == _HubVisualState.connecting
-              ? Border.all(
-                  color: CyberShieldColors.secondaryContainer
-                      .withValues(alpha: 0.4),
-                )
-              : null,
+    final trailing = switch (visual) {
+      _HubVisualState.connecting => const Icon(
+          Icons.sync,
+          size: 16,
+          color: CyberShieldColors.secondaryContainer,
         ),
-        child: Row(
-          children: [
-            Text(countryFlagEmoji(code), style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title.length == 2
-                        ? _countryName(title)
-                        : title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: CyberShieldTheme.labelBadge(
-                      color: selected
-                          ? CyberShieldColors.onSurface
-                          : CyberShieldColors.onSurfaceVariant,
-                    ),
+      _HubVisualState.connected => const Icon(
+          Icons.check,
+          size: 16,
+          color: CyberShieldColors.tertiary,
+        ),
+      _HubVisualState.disconnected => Icon(
+          Icons.expand_more,
+          size: 18,
+          color: CyberShieldColors.onSurfaceVariant,
+        ),
+    };
+
+    return Container(
+      margin: const EdgeInsets.all(2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: visual == _HubVisualState.connecting
+            ? Border.all(
+                color: CyberShieldColors.secondaryContainer
+                    .withValues(alpha: 0.4),
+              )
+            : null,
+      ),
+      child: Row(
+        children: [
+          Text(countryFlagEmoji(code), style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _countryName(code),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: CyberShieldTheme.labelBadge(
+                    color: CyberShieldColors.onSurface,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    city,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: CyberShieldTheme.labelCode(
-                      color: selected
-                          ? CyberShieldColors.secondaryContainer
-                          : CyberShieldColors.onSurfaceVariant,
-                    ).copyWith(fontSize: 11),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  city,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: CyberShieldTheme.labelCode(
+                    color: CyberShieldColors.secondaryContainer,
+                  ).copyWith(fontSize: 11),
+                ),
+              ],
             ),
-            ?trailing,
-          ],
-        ),
+          ),
+          trailing,
+        ],
       ),
     );
   }
+}
 
-  static String _countryName(String code) {
-    return switch (code.toUpperCase()) {
-      'DE' => 'GERMANY',
-      'RU' => 'RUSSIA',
-      'NL' => 'NETHERLANDS',
-      'US' => 'UNITED STATES',
-      'CZ' => 'CZECHIA',
-      _ => code,
-    };
-  }
+String _countryName(String code) {
+  return switch (code.toUpperCase()) {
+    'DE' => 'GERMANY',
+    'RU' => 'RUSSIA',
+    'NL' => 'NETHERLANDS',
+    'US' => 'UNITED STATES',
+    'CZ' => 'CZECHIA',
+    _ => code,
+  };
 }
 
 class _TelemetryGrid extends StatelessWidget {
