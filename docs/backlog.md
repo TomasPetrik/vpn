@@ -20,5 +20,6 @@ Last updated: 2026-11-17
 
 ## Nice-to-have
 
-- Soft update banner CTA (Store link / dismiss)
+- ~~Soft update banner CTA~~ — Update + dismiss; temp App Store link until PetrikVPN listing exists
 - Sim slice for WstunnelFFI XCFramework (device-only today)
+- Replace temp App Store URL with real PetrikVPN listing

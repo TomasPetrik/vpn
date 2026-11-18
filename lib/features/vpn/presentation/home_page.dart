@@ -1,10 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/di/injection.dart';
+import '../../app_update/domain/app_store_links.dart';
 import '../../app_update/presentation/app_update_cubit.dart';
 import '../../servers/presentation/server_info_cubit.dart';
 import 'vpn_connect_cubit.dart';
@@ -40,14 +43,16 @@ class HomePage extends StatelessWidget {
                   }
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      state.policy.message.isEmpty
+                    child: _SoftUpdateBanner(
+                      message: state.policy.message.isEmpty
                           ? 'Update available'
                           : state.policy.message,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
+                      storeUrl: AppStoreLinks.resolve(
+                        policyUrl: state.policy.updateUrl,
+                        isIos: defaultTargetPlatform == TargetPlatform.iOS,
                       ),
-                      textAlign: TextAlign.center,
+                      onDismiss: () =>
+                          context.read<AppUpdateCubit>().dismissSoftUpdate(),
                     ),
                   );
                 },
@@ -133,6 +138,62 @@ class HomePage extends StatelessWidget {
           child: _ConnectLogPanel(log: connect.log),
         );
       },
+    );
+  }
+}
+
+class _SoftUpdateBanner extends StatelessWidget {
+  const _SoftUpdateBanner({
+    required this.message,
+    required this.storeUrl,
+    required this.onDismiss,
+  });
+
+  final String message;
+  final String storeUrl;
+  final VoidCallback onDismiss;
+
+  Future<void> _openStore(BuildContext context) async {
+    final uri = Uri.tryParse(AppStoreLinks.normalize(storeUrl));
+    if (uri == null) {
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $uri')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            TextButton(
+              onPressed: storeUrl.isEmpty ? null : () => _openStore(context),
+              child: const Text('Update'),
+            ),
+            IconButton(
+              tooltip: 'Dismiss',
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close, size: 18),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -55,4 +55,11 @@ class AppUpdateCubit extends Cubit<AppUpdateState> {
       emit(AppUpdateRequired(cached!));
     }
   }
+
+  /// Hides the soft-update banner for this app session.
+  void dismissSoftUpdate() {
+    if (state is AppUpdateAvailable) {
+      emit(const AppUpdateUpToDate());
+    }
+  }
 }
