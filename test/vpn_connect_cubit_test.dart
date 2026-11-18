@@ -5,6 +5,7 @@ import 'package:ru_eu_vpn/features/device/domain/device_repository.dart';
 import 'package:ru_eu_vpn/features/device/domain/device_session.dart';
 import 'package:ru_eu_vpn/features/device/domain/vpn_peer_config.dart';
 import 'package:ru_eu_vpn/features/servers/domain/vpn_server.dart';
+import 'package:ru_eu_vpn/features/vpn/domain/tunnel_latency_probe.dart';
 import 'package:ru_eu_vpn/features/vpn/domain/vpn_engine.dart';
 import 'package:ru_eu_vpn/features/vpn/domain/vpn_usage_stats.dart';
 import 'package:ru_eu_vpn/features/vpn/presentation/vpn_connect_cubit.dart';
@@ -12,6 +13,19 @@ import 'package:ru_eu_vpn/features/vpn/presentation/vpn_connect_cubit.dart';
 class _MockDeviceRepository extends Mock implements DeviceRepository {}
 
 class _MockVpnEngine extends Mock implements VpnEngine {}
+
+class _FakeLatencyProbe implements TunnelLatencyProbe {
+  _FakeLatencyProbe([this.ms = 42]);
+
+  final int? ms;
+  String? lastHost;
+
+  @override
+  Future<int?> measureMs({String host = '1.1.1.1', int port = 443}) async {
+    lastHost = host;
+    return ms;
+  }
+}
 
 class _MemoryUsageStore implements VpnUsageStatsStore {
   VpnUsageTotals committed = const VpnUsageTotals.zero();
@@ -74,6 +88,7 @@ void main() {
   late _MockDeviceRepository repo;
   late _MockVpnEngine engine;
   late _MemoryUsageStore usage;
+  late _FakeLatencyProbe latencyProbe;
 
   final peer = VpnPeerConfig(
     peerId: 'peer-1',
@@ -98,12 +113,15 @@ void main() {
         deviceRepository: repo,
         vpnEngine: engine,
         usageStatsStore: usage,
+        latencyProbe: latencyProbe,
+        latencyInterval: const Duration(milliseconds: 50),
       );
 
   setUp(() {
     repo = _MockDeviceRepository();
     engine = _MockVpnEngine();
     usage = _MemoryUsageStore();
+    latencyProbe = _FakeLatencyProbe(42);
     when(() => repo.me()).thenAnswer(
       (_) async => const DeviceSession(userId: 'u1', deviceId: 'd1'),
     );
@@ -197,6 +215,18 @@ void main() {
         cubit.state.lastHandshakeAt,
         DateTime.utc(2026, 11, 18, 3, 0, 0),
       );
+    },
+  );
+
+  blocTest<VpnConnectCubit, VpnConnectState>(
+    'connected session stores tunnel latency from probe',
+    build: buildCubit,
+    act: (cubit) => cubit.connect(),
+    wait: const Duration(milliseconds: 700),
+    verify: (cubit) {
+      expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
+      expect(cubit.state.latencyMs, 42);
+      expect(latencyProbe.lastHost, '1.1.1.1');
     },
   );
 

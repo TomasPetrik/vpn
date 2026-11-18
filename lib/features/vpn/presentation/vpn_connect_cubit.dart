@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../device/domain/device_repository.dart';
 import '../../device/domain/vpn_peer_config.dart';
+import '../domain/tunnel_latency_probe.dart';
 import '../domain/vpn_engine.dart';
 import '../domain/vpn_usage_stats.dart';
 
@@ -42,6 +43,7 @@ class VpnConnectState {
     this.lastHandshakeAt,
     this.sessionStartedAt,
     this.sessionSeconds = 0,
+    this.latencyMs,
     this.committedTotals = const VpnUsageTotals.zero(),
   });
 
@@ -55,6 +57,9 @@ class VpnConnectState {
   final DateTime? lastHandshakeAt;
   final DateTime? sessionStartedAt;
   final int sessionSeconds;
+
+  /// Latest TCP-connect RTT through the tunnel, in milliseconds.
+  final int? latencyMs;
   final VpnUsageTotals committedTotals;
 
   bool get isBusy =>
@@ -96,6 +101,7 @@ class VpnConnectState {
     DateTime? lastHandshakeAt,
     DateTime? sessionStartedAt,
     int? sessionSeconds,
+    int? latencyMs,
     VpnUsageTotals? committedTotals,
     bool clearError = false,
     bool clearPeer = false,
@@ -115,6 +121,9 @@ class VpnConnectState {
       sessionStartedAt:
           clearSession ? null : (sessionStartedAt ?? this.sessionStartedAt),
       sessionSeconds: clearSession ? 0 : (sessionSeconds ?? this.sessionSeconds),
+      latencyMs: clearTraffic || clearSession
+          ? null
+          : (latencyMs ?? this.latencyMs),
       committedTotals: committedTotals ?? this.committedTotals,
     );
   }
@@ -133,9 +142,13 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     required DeviceRepository deviceRepository,
     required VpnEngine vpnEngine,
     required VpnUsageStatsStore usageStatsStore,
+    TunnelLatencyProbe? latencyProbe,
+    Duration latencyInterval = const Duration(seconds: 3),
   })  : _deviceRepository = deviceRepository,
         _vpnEngine = vpnEngine,
         _usageStatsStore = usageStatsStore,
+        _latencyProbe = latencyProbe ?? const TcpTunnelLatencyProbe(),
+        _latencyInterval = latencyInterval,
         super(VpnConnectState.initial()) {
     _statusSub = _vpnEngine.statusStream().listen(_onStatus);
     unawaited(_bootstrapUsage());
@@ -144,10 +157,14 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   final DeviceRepository _deviceRepository;
   final VpnEngine _vpnEngine;
   final VpnUsageStatsStore _usageStatsStore;
+  final TunnelLatencyProbe _latencyProbe;
+  final Duration _latencyInterval;
   StreamSubscription<VpnStatusSnapshot>? _statusSub;
   Timer? _statsTimer;
+  Timer? _latencyTimer;
   String? _lastStatusKey;
   bool _committingSession = false;
+  bool _latencyInFlight = false;
 
   @override
   Future<void> close() async {
@@ -191,11 +208,76 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       unawaited(_refreshTrafficStats());
     });
     unawaited(_refreshTrafficStats());
+    _startLatencyPolling();
   }
 
   void _stopStatsPolling() {
     _statsTimer?.cancel();
     _statsTimer = null;
+    _stopLatencyPolling();
+  }
+
+  void _startLatencyPolling() {
+    _latencyTimer?.cancel();
+    _latencyTimer = Timer.periodic(_latencyInterval, (_) {
+      unawaited(_refreshLatency());
+    });
+    unawaited(_refreshLatency());
+  }
+
+  void _stopLatencyPolling() {
+    _latencyTimer?.cancel();
+    _latencyTimer = null;
+    _latencyInFlight = false;
+  }
+
+  Future<void> _refreshLatency() async {
+    if (_latencyInFlight ||
+        state.phase != VpnConnectPhase.skeletonConnected ||
+        isClosed) {
+      return;
+    }
+    _latencyInFlight = true;
+    try {
+      final host = _latencyHost();
+      final ms = await _latencyProbe.measureMs(host: host);
+      if (isClosed || state.phase != VpnConnectPhase.skeletonConnected) {
+        return;
+      }
+      if (ms == state.latencyMs) {
+        return;
+      }
+      emit(state.copyWith(latencyMs: ms));
+    } finally {
+      _latencyInFlight = false;
+    }
+  }
+
+  String _latencyHost() {
+    final dns = state.peer?.dns;
+    if (dns != null) {
+      for (final entry in dns) {
+        final host = entry.trim();
+        if (_looksLikeIpv4(host)) {
+          return host;
+        }
+      }
+    }
+    return '1.1.1.1';
+  }
+
+  static bool _looksLikeIpv4(String value) {
+    final parts = value.split('.');
+    if (parts.length != 4) {
+      return false;
+    }
+    for (final part in parts) {
+      final n = int.tryParse(part);
+      if (n == null || n < 0 || n > 255) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _refreshTrafficStats() async {

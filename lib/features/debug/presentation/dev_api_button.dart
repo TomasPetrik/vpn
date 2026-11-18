@@ -13,9 +13,9 @@ class DevApiButton extends StatelessWidget {
     final log = getIt<ApiTrafficLog>();
     return SafeArea(
       child: Align(
-        alignment: Alignment.topRight,
+        alignment: Alignment.topLeft,
         child: Padding(
-          padding: const EdgeInsets.only(top: 4, right: 8),
+          padding: const EdgeInsets.only(top: 4, left: 8),
           child: AnimatedBuilder(
             animation: log,
             builder: (context, _) {

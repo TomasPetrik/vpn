@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/config/app_config.dart';
 import '../core/di/injection.dart';
+import '../core/theme/cyber_shield_theme.dart';
 import '../features/debug/presentation/dev_api_button.dart';
 
 class PetrikVpnApp extends StatelessWidget {
@@ -15,10 +16,8 @@ class PetrikVpnApp extends StatelessWidget {
     final isDevMode = getIt<AppConfig>().isDevMode;
     return MaterialApp.router(
       title: 'PetrikVPN',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0B4F6C)),
-        useMaterial3: true,
-      ),
+      theme: CyberShieldTheme.dark(),
+      themeMode: ThemeMode.dark,
       routerConfig: router,
       builder: (context, child) {
         if (!isDevMode) {

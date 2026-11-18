@@ -1,6 +1,21 @@
 class VpnStatsFormat {
   const VpnStatsFormat._();
 
+  /// Average megabits/sec from transferred [bytes] over [seconds].
+  static String mbps(int bytes, int seconds) {
+    if (seconds <= 0 || bytes <= 0) {
+      return '0.0';
+    }
+    final value = (bytes * 8) / seconds / 1e6;
+    if (value >= 100) {
+      return value.toStringAsFixed(0);
+    }
+    if (value >= 10) {
+      return value.toStringAsFixed(1);
+    }
+    return value.toStringAsFixed(1);
+  }
+
   static String bytes(int bytes) {
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     var value = bytes.toDouble().abs();
@@ -13,13 +28,13 @@ class VpnStatsFormat {
     return '${value.toStringAsFixed(digits)} ${units[unit]}';
   }
 
-  static String duration(int totalSeconds) {
+  static String duration(int totalSeconds, {bool includeHours = false}) {
     final seconds = totalSeconds < 0 ? 0 : totalSeconds;
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
     final s = seconds % 60;
     String two(int n) => n.toString().padLeft(2, '0');
-    if (h > 0) {
+    if (includeHours || h > 0) {
       return '${two(h)}:${two(m)}:${two(s)}';
     }
     return '${two(m)}:${two(s)}';

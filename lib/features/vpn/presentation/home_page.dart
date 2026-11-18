@@ -1,17 +1,31 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/theme/cyber_shield_colors.dart';
+import '../../../core/theme/cyber_shield_theme.dart';
 import '../../app_update/domain/app_store_links.dart';
 import '../../app_update/presentation/app_update_cubit.dart';
+import '../../servers/domain/vpn_server.dart';
 import '../../servers/presentation/server_info_cubit.dart';
+import 'home/connect_dial.dart';
+import 'home/country_flag.dart';
 import 'vpn_connect_cubit.dart';
 import 'vpn_stats_format.dart';
+
+enum _HubVisualState { disconnected, connecting, connected }
+
+ConnectDialVisual _dialVisual(_HubVisualState visual) => switch (visual) {
+      _HubVisualState.disconnected => ConnectDialVisual.disconnected,
+      _HubVisualState.connecting => ConnectDialVisual.connecting,
+      _HubVisualState.connected => ConnectDialVisual.connected,
+    };
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -19,114 +33,89 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDevMode = getIt<AppConfig>().isDevMode;
-    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Statistics',
-          onPressed: () => context.push('/stats'),
-          icon: const Icon(Icons.bar_chart_rounded),
-        ),
-        title: const Text('PetrikVPN'),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      backgroundColor: CyberShieldColors.background,
+      body: BlocBuilder<VpnConnectCubit, VpnConnectState>(
+        builder: (context, connect) {
+          final visual = _visualFor(connect);
+          return Column(
             children: [
-              BlocBuilder<AppUpdateCubit, AppUpdateState>(
-                builder: (context, state) {
-                  if (state is! AppUpdateAvailable) {
-                    return const SizedBox.shrink();
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _SoftUpdateBanner(
-                      message: state.policy.message.isEmpty
-                          ? 'Update available'
-                          : state.policy.message,
-                      storeUrl: AppStoreLinks.resolve(
-                        policyUrl: state.policy.updateUrl,
-                        isIos: defaultTargetPlatform == TargetPlatform.iOS,
-                      ),
-                      onDismiss: () =>
-                          context.read<AppUpdateCubit>().dismissSoftUpdate(),
-                    ),
-                  );
-                },
-              ),
+              _HubHeader(visual: visual),
               Expanded(
-                child: BlocBuilder<VpnConnectCubit, VpnConnectState>(
-                  builder: (context, connect) {
-                    return Column(
-                      children: [
-                        const Spacer(),
-                        _ServerLine(),
-                        const SizedBox(height: 28),
-                        _StatusBlock(connect: connect),
-                        if (connect.hasSessionStats) ...[
-                          const SizedBox(height: 28),
-                          _SessionStats(connect: connect),
-                        ],
-                        if (connect.errorMessage != null) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            connect.errorMessage!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.error,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  children: [
+                    BlocBuilder<AppUpdateCubit, AppUpdateState>(
+                      builder: (context, state) {
+                        if (state is! AppUpdateAvailable) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _SoftUpdateBanner(
+                            message: state.policy.message.isEmpty
+                                ? 'Update available'
+                                : state.policy.message,
+                            storeUrl: AppStoreLinks.resolve(
+                              policyUrl: state.policy.updateUrl,
+                              isIos:
+                                  defaultTargetPlatform == TargetPlatform.iOS,
                             ),
-                            textAlign: TextAlign.center,
+                            onDismiss: () => context
+                                .read<AppUpdateCubit>()
+                                .dismissSoftUpdate(),
                           ),
-                        ],
-                        const Spacer(),
-                        if (connect.isBusy)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 16),
-                            child: SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        if (connect.canDisconnect)
-                          FilledButton(
-                            onPressed: () =>
-                                context.read<VpnConnectCubit>().disconnect(),
-                            child: const Text('Disconnect'),
-                          )
-                        else
-                          FilledButton(
-                            onPressed: connect.canConnect
-                                ? () =>
-                                    context.read<VpnConnectCubit>().connect()
-                                : null,
-                            child: const Text('Connect'),
-                          ),
-                        if (isDevMode && connect.log.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: () => _showConnectLog(context, connect),
-                            child: const Text('Connect log'),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
+                        );
+                      },
+                    ),
+                    _HeroCard(connect: connect, visual: visual),
+                    const SizedBox(height: 12),
+                    _TelemetryGrid(connect: connect, visual: visual),
+                    const SizedBox(height: 12),
+                    _ServerDetailCard(connect: connect, visual: visual),
+                    if (connect.errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        connect.errorMessage!,
+                        style: CyberShieldTheme.bodySm(
+                          color: CyberShieldColors.error,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    if (isDevMode && connect.log.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => _showConnectLog(context, connect),
+                        child: const Text('Connect log'),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
+  }
+
+  static _HubVisualState _visualFor(VpnConnectState connect) {
+    if (connect.isConnected) {
+      return _HubVisualState.connected;
+    }
+    if (connect.isBusy) {
+      return _HubVisualState.connecting;
+    }
+    return _HubVisualState.disconnected;
   }
 
   void _showConnectLog(BuildContext context, VpnConnectState connect) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: CyberShieldColors.surfaceContainer,
       builder: (context) {
         return Padding(
           padding: EdgeInsets.only(
@@ -140,6 +129,1213 @@ class HomePage extends StatelessWidget {
       },
     );
   }
+}
+
+class _HubHeader extends StatelessWidget {
+  const _HubHeader({required this.visual});
+
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainerLowest.withValues(alpha: 0.85),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
+        child: Row(
+          children: [
+            Image.asset(
+              'assets/branding/header_mark.png',
+              height: 32,
+              width: 32,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.shield,
+                color: CyberShieldColors.secondaryContainer,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'PetrikVPN',
+              style: CyberShieldTheme.headlineSm(
+                color: CyberShieldColors.onSurface,
+              ).copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: CyberShieldColors.secondaryContainer.withValues(
+                  alpha: 0.2,
+                ),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'PRO',
+                style: CyberShieldTheme.labelBadge(
+                  color: CyberShieldColors.secondaryContainer,
+                ),
+              ),
+            ),
+            const Spacer(),
+            _HeaderStatusChip(visual: visual),
+            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                color: CyberShieldColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                size: 18,
+                color: CyberShieldColors.onPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderStatusChip extends StatelessWidget {
+  const _HeaderStatusChip({required this.visual});
+
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color, border, bg, pulse) = switch (visual) {
+      _HubVisualState.connected => (
+          'SECURE',
+          CyberShieldColors.tertiary,
+          Colors.transparent,
+          CyberShieldColors.surfaceContainerHigh,
+          true,
+        ),
+      _HubVisualState.connecting => (
+          'CONNECTING...',
+          CyberShieldColors.secondaryContainer,
+          CyberShieldColors.primary.withValues(alpha: 0.3),
+          CyberShieldColors.primary.withValues(alpha: 0.1),
+          true,
+        ),
+      _HubVisualState.disconnected => (
+          'NOT SECURE',
+          CyberShieldColors.onSurfaceVariant,
+          Colors.transparent,
+          CyberShieldColors.surfaceContainerHigh,
+          false,
+        ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _StatusDot(color: color, pulse: pulse),
+          const SizedBox(width: 6),
+          Text(label, style: CyberShieldTheme.labelBadge(color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.connect, required this.visual});
+
+  final VpnConnectState connect;
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = switch (visual) {
+      _HubVisualState.connecting =>
+        CyberShieldColors.primary.withValues(alpha: 0.2),
+      _ => Colors.transparent,
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          ConnectDial(
+            connect: connect,
+            visual: _dialVisual(visual),
+          ),
+          const SizedBox(height: 8),
+          _StatusHud(connect: connect, visual: visual),
+          const SizedBox(height: 16),
+          _RegionQuickSelect(connect: connect, visual: visual),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusHud extends StatelessWidget {
+  const _StatusHud({required this.connect, required this.visual});
+
+  final VpnConnectState connect;
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final latencyLabel = connect.latencyMs == null
+        ? null
+        : '${connect.latencyMs} ms';
+    final (status, color, subIcon, subText, pulse) = switch (visual) {
+      _HubVisualState.connected => (
+          latencyLabel == null
+              ? 'CONNECTED • ${VpnStatsFormat.duration(connect.sessionSeconds, includeHours: true)}'
+              : 'CONNECTED • ${VpnStatsFormat.duration(connect.sessionSeconds, includeHours: true)} • $latencyLabel',
+          CyberShieldColors.secondaryContainer,
+          Icons.check_circle,
+          'Secure Connection Active',
+          true,
+        ),
+      _HubVisualState.connecting => (
+          _connectingStatus(connect),
+          CyberShieldColors.secondaryContainer,
+          Icons.autorenew,
+          _connectingSubtitle(connect),
+          true,
+        ),
+      _HubVisualState.disconnected => (
+          'DISCONNECTED',
+          CyberShieldColors.onSurfaceVariant,
+          Icons.shield_outlined,
+          'Tap to protect your traffic',
+          false,
+        ),
+    };
+
+    final subColor = switch (visual) {
+      _HubVisualState.connected => CyberShieldColors.tertiary,
+      _HubVisualState.connecting => CyberShieldColors.secondaryContainer,
+      _HubVisualState.disconnected => CyberShieldColors.outline,
+    };
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: CyberShieldColors.surfaceContainerHighest
+                .withValues(alpha: visual == _HubVisualState.connecting ? 0.9 : 1),
+            borderRadius: BorderRadius.circular(999),
+            border: visual == _HubVisualState.connecting
+                ? Border.all(
+                    color: CyberShieldColors.secondaryContainer
+                        .withValues(alpha: 0.3),
+                  )
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _StatusDot(color: color, pulse: pulse),
+              const SizedBox(width: 8),
+              Text(
+                status,
+                style: CyberShieldTheme.labelCode(
+                  color: color,
+                  weight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(subIcon, size: 14, color: subColor),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                subText,
+                style: CyberShieldTheme.bodySm(),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+        if (visual == _HubVisualState.connecting) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 176,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: _handshakePercent(connect.phase) / 100,
+                minHeight: 4,
+                backgroundColor: CyberShieldColors.surfaceContainerHighest,
+                valueColor: const AlwaysStoppedAnimation(
+                  CyberShieldColors.secondaryContainer,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _connectingStatus(VpnConnectState connect) {
+    final pct = _handshakePercent(connect.phase);
+    return 'CONNECTING • HANDSHAKE $pct%';
+  }
+
+  static String _connectingSubtitle(VpnConnectState connect) {
+    final city = connect.peer?.server.city ??
+        connect.peer?.server.name ??
+        'server';
+    return switch (connect.phase) {
+      VpnConnectPhase.checkingSession ||
+      VpnConnectPhase.ensuringKeys =>
+        'Securing DNS & preparing keys…',
+      VpnConnectPhase.provisioningPeer ||
+      VpnConnectPhase.preparingVpn =>
+        'Generating cryptographic keypairs…',
+      _ => 'Securing DNS & routing traffic to $city…',
+    };
+  }
+}
+
+class _RegionQuickSelect extends StatelessWidget {
+  const _RegionQuickSelect({required this.connect, required this.visual});
+
+  final VpnConnectState connect;
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ServerInfoCubit, ServerInfoState>(
+      builder: (context, state) {
+        final servers = switch (state) {
+          ServerInfoLoaded(:final servers) => servers,
+          _ => const <VpnServer>[],
+        };
+        final active = connect.peer?.server ??
+            (servers.isNotEmpty ? servers.first : null);
+        final second = servers.length > 1
+            ? servers.firstWhere(
+                (s) => s.id != active?.id,
+                orElse: () => servers[1],
+              )
+            : null;
+
+        final border = visual == _HubVisualState.connecting
+            ? CyberShieldColors.secondaryContainer.withValues(alpha: 0.3)
+            : CyberShieldColors.outlineVariant.withValues(alpha: 0.4);
+
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: CyberShieldColors.surfaceContainerLowest.withValues(
+              alpha: 0.9,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _RegionChip(
+                  server: active,
+                  selected: true,
+                  visual: visual,
+                  fallbackName: 'Germany',
+                  fallbackCity: 'Frankfurt',
+                  fallbackCode: 'DE',
+                ),
+              ),
+              Expanded(
+                child: _RegionChip(
+                  server: second,
+                  selected: false,
+                  visual: visual,
+                  fallbackName: 'Russia',
+                  fallbackCity: 'Moscow',
+                  fallbackCode: 'RU',
+                  dimmed: visual == _HubVisualState.connecting,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RegionChip extends StatelessWidget {
+  const _RegionChip({
+    required this.server,
+    required this.selected,
+    required this.visual,
+    required this.fallbackName,
+    required this.fallbackCity,
+    required this.fallbackCode,
+    this.dimmed = false,
+  });
+
+  final VpnServer? server;
+  final bool selected;
+  final _HubVisualState visual;
+  final String fallbackName;
+  final String fallbackCity;
+  final String fallbackCode;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = server?.countryCode ?? fallbackCode;
+    final title = (server?.countryCode ?? fallbackName).toUpperCase();
+    final city = server?.city ?? server?.name ?? fallbackCity;
+
+    final trailing = !selected
+        ? null
+        : switch (visual) {
+            _HubVisualState.connecting => Icon(
+                Icons.sync,
+                size: 16,
+                color: CyberShieldColors.secondaryContainer,
+              ),
+            _HubVisualState.connected ||
+            _HubVisualState.disconnected =>
+              const Icon(
+                Icons.check,
+                size: 16,
+                color: CyberShieldColors.tertiary,
+              ),
+          };
+
+    return Opacity(
+      opacity: dimmed ? 0.6 : 1,
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? CyberShieldColors.surfaceContainerHigh
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: selected && visual == _HubVisualState.connecting
+              ? Border.all(
+                  color: CyberShieldColors.secondaryContainer
+                      .withValues(alpha: 0.4),
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Text(countryFlagEmoji(code), style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.length == 2
+                        ? _countryName(title)
+                        : title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: CyberShieldTheme.labelBadge(
+                      color: selected
+                          ? CyberShieldColors.onSurface
+                          : CyberShieldColors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    city,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: CyberShieldTheme.labelCode(
+                      color: selected
+                          ? CyberShieldColors.secondaryContainer
+                          : CyberShieldColors.onSurfaceVariant,
+                    ).copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _countryName(String code) {
+    return switch (code.toUpperCase()) {
+      'DE' => 'GERMANY',
+      'RU' => 'RUSSIA',
+      'NL' => 'NETHERLANDS',
+      'US' => 'UNITED STATES',
+      'CZ' => 'CZECHIA',
+      _ => code,
+    };
+  }
+}
+
+class _TelemetryGrid extends StatelessWidget {
+  const _TelemetryGrid({required this.connect, required this.visual});
+
+  final VpnConnectState connect;
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    final rx = connect.rxBytes ?? 0;
+    final tx = connect.txBytes ?? 0;
+    final seconds = connect.sessionSeconds;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _TelemetryCard(
+            title: 'Download',
+            icon: Icons.arrow_downward,
+            accent: CyberShieldColors.secondaryContainer,
+            visual: visual,
+            value: switch (visual) {
+              _HubVisualState.disconnected => '0.0',
+              _HubVisualState.connecting => '--',
+              _HubVisualState.connected => VpnStatsFormat.mbps(rx, seconds),
+            },
+            unit: switch (visual) {
+              _HubVisualState.connecting => 'Measuring...',
+              _ => 'Mbps',
+            },
+            badge: switch (visual) {
+              _HubVisualState.disconnected => 'IDLE',
+              _HubVisualState.connecting => 'TESTING',
+              _HubVisualState.connected => 'FAST',
+            },
+            badgeColor: switch (visual) {
+              _HubVisualState.connected => CyberShieldColors.tertiary,
+              _HubVisualState.connecting =>
+                CyberShieldColors.secondaryContainer,
+              _HubVisualState.disconnected =>
+                CyberShieldColors.onSurfaceVariant,
+            },
+            footerLabel: visual == _HubVisualState.connecting
+                ? 'Handshake'
+                : 'Total',
+            footerValue: visual == _HubVisualState.connecting
+                ? '—'
+                : VpnStatsFormat.bytes(
+                    visual == _HubVisualState.connected ? rx : 0,
+                  ),
+            sparkline: _SparklineStyle.download,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _TelemetryCard(
+            title: 'Upload',
+            icon: Icons.arrow_upward,
+            accent: CyberShieldColors.primary,
+            visual: visual,
+            value: switch (visual) {
+              _HubVisualState.disconnected => '0.0',
+              _HubVisualState.connecting => '--',
+              _HubVisualState.connected => VpnStatsFormat.mbps(tx, seconds),
+            },
+            unit: switch (visual) {
+              _HubVisualState.connecting => 'Measuring...',
+              _ => 'Mbps',
+            },
+            badge: switch (visual) {
+              _HubVisualState.disconnected => 'IDLE',
+              _HubVisualState.connecting => 'PROBING',
+              _HubVisualState.connected => 'STABLE',
+            },
+            badgeColor: switch (visual) {
+              _HubVisualState.connected => CyberShieldColors.primary,
+              _HubVisualState.connecting => CyberShieldColors.primary,
+              _HubVisualState.disconnected =>
+                CyberShieldColors.onSurfaceVariant,
+            },
+            footerLabel: visual == _HubVisualState.connecting
+                ? 'Latency'
+                : 'Total',
+            footerValue: visual == _HubVisualState.connecting
+                ? '—'
+                : VpnStatsFormat.bytes(
+                    visual == _HubVisualState.connected ? tx : 0,
+                  ),
+            sparkline: _SparklineStyle.upload,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _SparklineStyle { download, upload }
+
+class _TelemetryCard extends StatelessWidget {
+  const _TelemetryCard({
+    required this.title,
+    required this.icon,
+    required this.accent,
+    required this.visual,
+    required this.value,
+    required this.unit,
+    required this.badge,
+    required this.badgeColor,
+    required this.footerLabel,
+    required this.footerValue,
+    required this.sparkline,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color accent;
+  final _HubVisualState visual;
+  final String value;
+  final String unit;
+  final String badge;
+  final Color badgeColor;
+  final String footerLabel;
+  final String footerValue;
+  final _SparklineStyle sparkline;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = visual == _HubVisualState.disconnected;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: visual == _HubVisualState.connecting
+            ? Border.all(
+                color: CyberShieldColors.outlineVariant.withValues(alpha: 0.3),
+              )
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: muted ? CyberShieldColors.outline : accent,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                title.toUpperCase(),
+                style: CyberShieldTheme.labelBadge(),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: visual == _HubVisualState.connected
+                      ? badgeColor.withValues(alpha: 0.18)
+                      : CyberShieldColors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(4),
+                  border: visual == _HubVisualState.connecting
+                      ? Border.all(color: badgeColor.withValues(alpha: 0.2))
+                      : null,
+                ),
+                child: Text(
+                  badge,
+                  style: CyberShieldTheme.labelCode(color: badgeColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: CyberShieldTheme.metricStat(
+                  color: muted
+                      ? CyberShieldColors.onSurfaceVariant
+                      : CyberShieldColors.onSurface,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  unit,
+                  style: CyberShieldTheme.labelCode(color: accent),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 40,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _SparklinePainter(
+                style: sparkline,
+                visual: visual,
+                color: accent,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                footerLabel,
+                style: CyberShieldTheme.labelCode(),
+              ),
+              const Spacer(),
+              Text(
+                footerValue,
+                style: CyberShieldTheme.labelCode(
+                  color: muted
+                      ? CyberShieldColors.onSurfaceVariant
+                      : (visual == _HubVisualState.connecting
+                          ? accent
+                          : CyberShieldColors.onSurface),
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServerDetailCard extends StatelessWidget {
+  const _ServerDetailCard({required this.connect, required this.visual});
+
+  final VpnConnectState connect;
+  final _HubVisualState visual;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ServerInfoCubit, ServerInfoState>(
+      builder: (context, state) {
+        final fallback = switch (state) {
+          ServerInfoLoaded(:final servers) when servers.isNotEmpty =>
+            servers.first,
+          _ => null,
+        };
+        final server = connect.peer?.server ?? fallback;
+        final ip = connect.peer?.transport.serverIps.isNotEmpty == true
+            ? connect.peer!.transport.serverIps.first
+            : (connect.peer?.interfaceAddresses.isNotEmpty == true
+                ? connect.peer!.interfaceAddresses.first.split('/').first
+                : '—');
+
+        final (title, statusLabel, statusColor) = switch (visual) {
+          _HubVisualState.connected => (
+              'Connected Server',
+              'Connected',
+              CyberShieldColors.tertiary,
+            ),
+          _HubVisualState.connecting => (
+              'Target Server',
+              'Handshaking...',
+              CyberShieldColors.secondaryContainer,
+            ),
+          _HubVisualState.disconnected => (
+              'Selected Server',
+              'Standby',
+              CyberShieldColors.onSurfaceVariant,
+            ),
+        };
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CyberShieldColors.surfaceContainer,
+            borderRadius: BorderRadius.circular(12),
+            border: visual == _HubVisualState.connecting
+                ? Border.all(
+                    color:
+                        CyberShieldColors.outlineVariant.withValues(alpha: 0.3),
+                  )
+                : null,
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: CyberShieldTheme.labelBadge(),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      _StatusDot(
+                        color: statusColor,
+                        pulse: visual != _HubVisualState.disconnected,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        statusLabel,
+                        style: CyberShieldTheme.labelCode(color: statusColor),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: CyberShieldColors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      countryFlagEmoji(server?.countryCode),
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                server?.name ?? 'PetrikVPN',
+                                style: CyberShieldTheme.headlineSm(),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (server?.countryCode != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      CyberShieldColors.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  server!.countryCode!.toUpperCase(),
+                                  style: CyberShieldTheme.labelBadge(
+                                    color: visual == _HubVisualState.connecting
+                                        ? CyberShieldColors.secondaryContainer
+                                        : CyberShieldColors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'IP: $ip',
+                          style: CyberShieldTheme.labelCode(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: CyberShieldColors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.speed,
+                          size: 16,
+                          color: visual == _HubVisualState.disconnected
+                              ? CyberShieldColors.onSurfaceVariant
+                              : CyberShieldColors.secondaryContainer,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '—',
+                          style: CyberShieldTheme.labelCode(
+                            color: visual == _HubVisualState.disconnected
+                                ? CyberShieldColors.onSurfaceVariant
+                                : CyberShieldColors.onSurface,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (visual == _HubVisualState.connecting) ...[
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                _HandshakeProgress(phase: connect.phase),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HandshakeProgress extends StatelessWidget {
+  const _HandshakeProgress({required this.phase});
+
+  final VpnConnectPhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = _handshakePercent(phase);
+    final step = pct <= 33 ? 1 : (pct <= 68 ? 2 : 3);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text('Tunnel Negotiation', style: CyberShieldTheme.labelCode()),
+            const Spacer(),
+            Text(
+              'Step $step of 3',
+              style: CyberShieldTheme.labelCode(
+                color: CyberShieldColors.secondaryContainer,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: pct / 100,
+            minHeight: 6,
+            backgroundColor: CyberShieldColors.surfaceContainerHighest,
+            valueColor: const AlwaysStoppedAnimation(
+              CyberShieldColors.secondaryContainer,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _StepChip(
+                done: step > 1,
+                active: step == 1,
+                label: 'DNS OK',
+              ),
+            ),
+            Expanded(
+              child: _StepChip(
+                done: step > 2,
+                active: step == 2,
+                label: 'Keys $pct%',
+              ),
+            ),
+            Expanded(
+              child: _StepChip(
+                done: step > 3,
+                active: step == 3,
+                label: 'Route',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StepChip extends StatelessWidget {
+  const _StepChip({
+    required this.done,
+    required this.active,
+    required this.label,
+  });
+
+  final bool done;
+  final bool active;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = done
+        ? CyberShieldColors.tertiary
+        : active
+            ? CyberShieldColors.secondaryContainer
+            : CyberShieldColors.outline;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          done
+              ? Icons.check_circle
+              : active
+                  ? Icons.sync
+                  : Icons.radio_button_unchecked,
+          size: 12,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            style: CyberShieldTheme.labelCode(color: color)
+                .copyWith(fontSize: 10),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+int _handshakePercent(VpnConnectPhase phase) {
+  return switch (phase) {
+    VpnConnectPhase.checkingSession => 18,
+    VpnConnectPhase.ensuringKeys => 34,
+    VpnConnectPhase.provisioningPeer => 52,
+    VpnConnectPhase.preparingVpn => 68,
+    VpnConnectPhase.startingTransport => 82,
+    VpnConnectPhase.startingTunnel => 92,
+    VpnConnectPhase.disconnecting => 40,
+    _ => 10,
+  };
+}
+
+class _StatusDot extends StatefulWidget {
+  const _StatusDot({required this.color, required this.pulse});
+
+  final Color color;
+  final bool pulse;
+
+  @override
+  State<_StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    if (widget.pulse) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _StatusDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pulse && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.pulse && _controller.isAnimating) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 10,
+      height: 10,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              if (widget.pulse)
+                Opacity(
+                  opacity: (1 - _controller.value) * 0.75,
+                  child: Transform.scale(
+                    scale: 1 + _controller.value,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: widget.color,
+                      ),
+                    ),
+                  ),
+                ),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color,
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.color.withValues(alpha: 0.55),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({
+    required this.style,
+    required this.visual,
+    required this.color,
+  });
+
+  final _SparklineStyle style;
+  final _HubVisualState visual;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (visual == _HubVisualState.disconnected) {
+      final paint = Paint()
+        ..color = CyberShieldColors.outlineVariant
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+      final y = size.height * 0.9;
+      _drawDashedLine(canvas, Offset(0, y), Offset(size.width, y), paint);
+      return;
+    }
+
+    final points = style == _SparklineStyle.download
+        ? <Offset>[
+            Offset(0, size.height * 0.8),
+            Offset(size.width * 0.25, size.height * 0.4),
+            Offset(size.width * 0.5, size.height * 0.45),
+            Offset(size.width * 0.75, size.height * 0.2),
+            Offset(size.width, size.height * 0.3),
+          ]
+        : <Offset>[
+            Offset(0, size.height * 0.9),
+            Offset(size.width * 0.3, size.height * 0.6),
+            Offset(size.width * 0.55, size.height * 0.45),
+            Offset(size.width * 0.8, size.height * 0.55),
+            Offset(size.width, size.height * 0.25),
+          ];
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length; i++) {
+      final prev = points[i - 1];
+      final curr = points[i];
+      final mid = Offset((prev.dx + curr.dx) / 2, (prev.dy + curr.dy) / 2);
+      path.quadraticBezierTo(prev.dx, prev.dy, mid.dx, mid.dy);
+    }
+    path.lineTo(points.last.dx, points.last.dy);
+
+    final fillPath = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    final fill = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          color.withValues(alpha: visual == _HubVisualState.connecting ? 0.35 : 0.5),
+          color.withValues(alpha: 0),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawPath(fillPath, fill);
+
+    final stroke = Paint()
+      ..color = color
+      ..strokeWidth = visual == _HubVisualState.connected ? 2 : 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path, stroke);
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset a, Offset b, Paint paint) {
+    const dash = 4.0;
+    const gap = 3.0;
+    final total = (b - a).distance;
+    final direction = (b - a) / total;
+    var drawn = 0.0;
+    while (drawn < total) {
+      final start = a + direction * drawn;
+      final end = a + direction * math.min(drawn + dash, total);
+      canvas.drawLine(start, end, paint);
+      drawn += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) =>
+      oldDelegate.visual != visual ||
+      oldDelegate.style != style ||
+      oldDelegate.color != color;
 }
 
 class _SoftUpdateBanner extends StatelessWidget {
@@ -168,19 +1364,15 @@ class _SoftUpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Material(
-      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+      color: CyberShieldColors.primaryContainer.withValues(alpha: 0.35),
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                message,
-                style: theme.textTheme.bodySmall,
-              ),
+              child: Text(message, style: CyberShieldTheme.bodySm()),
             ),
             TextButton(
               onPressed: storeUrl.isEmpty ? null : () => _openStore(context),
@@ -194,115 +1386,6 @@ class _SoftUpdateBanner extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ServerLine extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return BlocBuilder<VpnConnectCubit, VpnConnectState>(
-      buildWhen: (a, b) => a.peer?.server.id != b.peer?.server.id,
-      builder: (context, connect) {
-        final peerServer = connect.peer?.server;
-        if (peerServer != null) {
-          return Text(
-            [
-              peerServer.name,
-              if (peerServer.countryCode != null) peerServer.countryCode!,
-            ].join(' · '),
-            style: theme.textTheme.titleMedium,
-            textAlign: TextAlign.center,
-          );
-        }
-        return BlocBuilder<ServerInfoCubit, ServerInfoState>(
-          builder: (context, state) {
-            final label = switch (state) {
-              ServerInfoLoaded(:final servers) when servers.isNotEmpty => [
-                  servers.first.name,
-                  if (servers.first.countryCode != null)
-                    servers.first.countryCode!,
-                ].join(' · '),
-              ServerInfoLoading() => 'Loading server…',
-              ServerInfoError() => 'Server unavailable',
-              _ => 'PetrikVPN',
-            };
-            return Text(
-              label,
-              style: theme.textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _StatusBlock extends StatelessWidget {
-  const _StatusBlock({required this.connect});
-
-  final VpnConnectState connect;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final connected = connect.isConnected;
-    return Column(
-      children: [
-        Text(
-          connect.stepLabel,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: connected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        if (connected) ...[
-          const SizedBox(height: 8),
-          Text(
-            VpnStatsFormat.duration(connect.sessionSeconds),
-            style: theme.textTheme.displaySmall?.copyWith(
-              fontFeatures: const [FontFeature.tabularFigures()],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _SessionStats extends StatelessWidget {
-  const _SessionStats({required this.connect});
-
-  final VpnConnectState connect;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodyLarge;
-    return Column(
-      children: [
-        Text(
-          '↓ ${VpnStatsFormat.bytes(connect.rxBytes ?? 0)}'
-          '    ↑ ${VpnStatsFormat.bytes(connect.txBytes ?? 0)}',
-          style: style,
-          textAlign: TextAlign.center,
-        ),
-        if (connect.lastHandshakeAt != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Handshake ${VpnStatsFormat.handshakeAgo(connect.lastHandshakeAt, DateTime.now())}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ],
     );
   }
 }
@@ -341,10 +1424,7 @@ class _ConnectLogPanel extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(
-                'Connect log',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
+              child: Text('Connect log', style: CyberShieldTheme.headlineSm()),
             ),
             TextButton.icon(
               onPressed: () => _copy(context),
@@ -360,18 +1440,17 @@ class _ConnectLogPanel extends StatelessWidget {
           ),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
+              border: Border.all(color: CyberShieldColors.outlineVariant),
               borderRadius: BorderRadius.circular(8),
+              color: CyberShieldColors.surfaceContainerLowest,
             ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(12),
               child: SelectableText(
                 _plainText,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  height: 1.45,
-                ),
+                style: CyberShieldTheme.labelCode(
+                  color: CyberShieldColors.onSurface,
+                ).copyWith(fontSize: 11, height: 1.45),
               ),
             ),
           ),
