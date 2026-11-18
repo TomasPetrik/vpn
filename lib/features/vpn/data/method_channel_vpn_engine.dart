@@ -14,12 +14,14 @@ class MethodChannelVpnEngine implements VpnEngine {
   final MethodChannel _channel;
   final EventChannel _statusChannel;
 
-  bool get _isIos => defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _isSupported =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.android;
 
   @override
   Future<String> getPublicKey() async {
-    if (!_isIos) {
-      throw UnsupportedError('vpn_engine getPublicKey is iOS-only for now');
+    if (!_isSupported) {
+      throw UnsupportedError('vpn_engine getPublicKey is mobile-only for now');
     }
     final result =
         await _channel.invokeMethod<Map<Object?, Object?>>('getPublicKey');
@@ -32,11 +34,11 @@ class MethodChannelVpnEngine implements VpnEngine {
 
   @override
   Future<VpnPrepareResult> prepare() async {
-    if (!_isIos) {
+    if (!_isSupported) {
       return const VpnPrepareResult(
         granted: false,
         status: 'unsupported',
-        message: 'prepare() is iOS-only for now',
+        message: 'prepare() is mobile-only for now',
       );
     }
     final result = await _channel.invokeMethod<Map<Object?, Object?>>('prepare');
@@ -52,11 +54,11 @@ class MethodChannelVpnEngine implements VpnEngine {
 
   @override
   Future<VpnTunnelResult> startTunnel(Map<String, Object?> tunnelConfig) async {
-    if (!_isIos) {
+    if (!_isSupported) {
       return const VpnTunnelResult(
         ok: false,
         status: 'unsupported',
-        message: 'startTunnel() is iOS-only for now',
+        message: 'startTunnel() is mobile-only for now',
       );
     }
     final result = await _channel.invokeMethod<Map<Object?, Object?>>(
@@ -75,11 +77,11 @@ class MethodChannelVpnEngine implements VpnEngine {
 
   @override
   Future<VpnTunnelResult> stopTunnel() async {
-    if (!_isIos) {
+    if (!_isSupported) {
       return const VpnTunnelResult(
         ok: false,
         status: 'unsupported',
-        message: 'stopTunnel() is iOS-only for now',
+        message: 'stopTunnel() is mobile-only for now',
       );
     }
     final result =
@@ -96,7 +98,7 @@ class MethodChannelVpnEngine implements VpnEngine {
 
   @override
   Future<VpnStatusSnapshot> getStatus() async {
-    if (!_isIos) {
+    if (!_isSupported) {
       return const VpnStatusSnapshot(
         status: 'unsupported',
         extensionStatus: '',
@@ -117,7 +119,7 @@ class MethodChannelVpnEngine implements VpnEngine {
 
   @override
   Stream<VpnStatusSnapshot> statusStream() {
-    if (!_isIos) {
+    if (!_isSupported) {
       return const Stream.empty();
     }
     return _statusChannel.receiveBroadcastStream().map((event) {

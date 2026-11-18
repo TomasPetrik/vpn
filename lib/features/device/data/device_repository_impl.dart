@@ -24,7 +24,11 @@ class DeviceRepositoryImpl implements DeviceRepository {
   final PackageInfo packageInfo;
 
   @override
-  Future<DeviceRegistration> register() async {
+  Future<DeviceRegistration> register({bool clearBearer = false}) async {
+    if (clearBearer) {
+      await secureStore.clearToken();
+    }
+
     var installationId = await secureStore.readInstallationId();
     if (installationId == null || installationId.isEmpty) {
       installationId = const Uuid().v4();
@@ -52,6 +56,14 @@ class DeviceRepositoryImpl implements DeviceRepository {
     final token = data['device_token'];
     if (token is String && token.isNotEmpty) {
       await secureStore.writeToken(token);
+    } else {
+      final existing = await secureStore.readToken();
+      if (existing == null || existing.isEmpty) {
+        if (!clearBearer) {
+          return register(clearBearer: true);
+        }
+        throw StateError('register returned no device_token');
+      }
     }
 
     return DeviceRegistration(
@@ -59,6 +71,22 @@ class DeviceRepositoryImpl implements DeviceRepository {
       deviceId: '${data['device_id']}',
       created: data['created'] == true,
     );
+  }
+
+  @override
+  Future<DeviceSession> ensureSession() async {
+    final existing = await secureStore.readToken();
+    if (existing != null && existing.isNotEmpty) {
+      try {
+        return await me();
+      } on DioException catch (e) {
+        if (e.response?.statusCode != 401 && e.response?.statusCode != 403) {
+          rethrow;
+        }
+      }
+    }
+    await register(clearBearer: true);
+    return me();
   }
 
   @override

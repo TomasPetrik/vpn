@@ -107,6 +107,9 @@ void main() {
     when(() => repo.me()).thenAnswer(
       (_) async => const DeviceSession(userId: 'u1', deviceId: 'd1'),
     );
+    when(() => repo.ensureSession()).thenAnswer(
+      (_) async => const DeviceSession(userId: 'u1', deviceId: 'd1'),
+    );
     when(() => repo.upsertPeer(publicKey: any(named: 'publicKey')))
         .thenAnswer((_) async => peer);
     when(() => engine.getPublicKey())
@@ -158,7 +161,7 @@ void main() {
   blocTest<VpnConnectCubit, VpnConnectState>(
     'connect failure emits error with log',
     build: () {
-      when(() => repo.me()).thenThrow(Exception('offline'));
+      when(() => repo.ensureSession()).thenThrow(Exception('offline'));
       return buildCubit();
     },
     act: (cubit) => cubit.connect(),

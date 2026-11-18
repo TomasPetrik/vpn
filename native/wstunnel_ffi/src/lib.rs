@@ -1,4 +1,4 @@
-//! C FFI around the wstunnel 10.5.2 client for iOS PacketTunnel.
+//! C FFI around the wstunnel 10.5.2 client for iOS PacketTunnel / Android VpnService.
 //!
 //! Config JSON (UTF-8):
 //! ```json
@@ -11,6 +11,9 @@
 //!   "url": "wss://vpn.radarcut.com"
 //! }
 //! ```
+
+#[cfg(target_os = "android")]
+mod android_jni;
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;

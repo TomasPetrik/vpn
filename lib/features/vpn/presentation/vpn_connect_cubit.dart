@@ -352,8 +352,8 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     try {
       log('Connect tapped');
       emitPhase(VpnConnectPhase.checkingSession, 'Checking session…');
-      log('GET /me — verifying device session');
-      final session = await _deviceRepository.me();
+      log('ensureSession — register/re-auth if needed');
+      final session = await _deviceRepository.ensureSession();
       log('Session OK — user ${session.userId}, device ${session.deviceId}');
 
       emitPhase(VpnConnectPhase.ensuringKeys, 'Preparing keys…');

@@ -35,14 +35,17 @@ class BootstrapCubit extends Cubit<BootstrapState> {
   Future<void> start() async {
     emit(const BootstrapRegistering());
     try {
-      final registration = await _repository.register();
-      DeviceSession? session;
-      try {
-        session = await _repository.me();
-      } catch (_) {
-        // Registration succeeded; /me is best-effort for Phase 2.
-      }
-      emit(BootstrapRegistered(registration, session: session));
+      final session = await _repository.ensureSession();
+      emit(
+        BootstrapRegistered(
+          DeviceRegistration(
+            userId: session.userId,
+            deviceId: session.deviceId,
+            created: false,
+          ),
+          session: session,
+        ),
+      );
     } catch (e) {
       emit(BootstrapOffline(e.toString()));
     }

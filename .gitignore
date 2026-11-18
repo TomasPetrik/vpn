@@ -88,3 +88,6 @@ native/wstunnel_ffi/target/
 
 # Upstream wstunnel demo mTLS material (not needed to build FFI)
 native/vendor/wstunnel-10.5.2/certs/
+
+# Android local Gradle output
+android/build/

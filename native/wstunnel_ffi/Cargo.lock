@@ -2992,6 +2992,7 @@ name = "wstunnel_ffi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "jni",
  "once_cell",
  "rustls-pki-types",
  "serde",
