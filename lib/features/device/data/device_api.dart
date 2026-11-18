@@ -40,4 +40,14 @@ class DeviceApi {
     );
     return response.data ?? {};
   }
+
+  Future<Map<String, dynamic>> submitDiagnostics(
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/devices/me/diagnostics',
+      data: body,
+    );
+    return response.data ?? {};
+  }
 }

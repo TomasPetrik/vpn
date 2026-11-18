@@ -70,6 +70,13 @@ class _CyberBottomNav extends StatelessWidget {
                     selected: currentIndex == 1,
                     onTap: () => onTap(1),
                   ),
+                  _NavItem(
+                    icon: Icons.settings_outlined,
+                    activeIcon: Icons.settings,
+                    label: 'Settings',
+                    selected: currentIndex == 2,
+                    onTap: () => onTap(2),
+                  ),
                 ],
               ),
             ),

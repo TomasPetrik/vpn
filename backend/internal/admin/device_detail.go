@@ -32,6 +32,13 @@ type deviceDetailView struct {
 	LastClientIP, LastClientCountry          string
 	HandshakeCount                           uint64
 	Panels                                   []artifactPanel
+	Diagnostics                              []deviceDiagnosticItem
+}
+
+type deviceDiagnosticItem struct {
+	ID, CreatedAt, AppVersion, Platform, Summary, ClientIP string
+	AppBuild                                               int
+	PayloadJSON                                            string
 }
 
 func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +183,69 @@ func (h *Handler) loadDeviceDetail(r *http.Request, id string) (deviceDetailView
 	}
 
 	d.Panels = h.buildArtifactPanels(&d)
+	diags, derr := h.loadDeviceDiagnostics(id)
+	if derr != nil {
+		return d, derr
+	}
+	d.Diagnostics = diags
 	return d, nil
+}
+
+func (h *Handler) loadDeviceDiagnostics(deviceID string) ([]deviceDiagnosticItem, error) {
+	rows, err := h.DB.Query(`
+		SELECT id, created_at, app_version, app_build, platform, summary, client_ip, payload_json
+		FROM device_diagnostics
+		WHERE device_id = ?
+		ORDER BY created_at DESC
+		LIMIT 50`, deviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]deviceDiagnosticItem, 0)
+	for rows.Next() {
+		var (
+			item                       deviceDiagnosticItem
+			created                    time.Time
+			appVersion, platform       sql.NullString
+			summary, clientIP          sql.NullString
+			appBuild                   sql.NullInt64
+			payload                    string
+		)
+		if err := rows.Scan(
+			&item.ID, &created, &appVersion, &appBuild, &platform, &summary, &clientIP, &payload,
+		); err != nil {
+			return nil, err
+		}
+		item.CreatedAt = created.UTC().Format(time.RFC3339)
+		item.AppVersion = nullString(appVersion)
+		item.Platform = nullString(platform)
+		item.Summary = nullString(summary)
+		item.ClientIP = nullString(clientIP)
+		if appBuild.Valid {
+			item.AppBuild = int(appBuild.Int64)
+		}
+		item.PayloadJSON = prettyJSON(payload)
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func prettyJSON(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	var v any
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		return raw
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return raw
+	}
+	return string(b)
 }
 
 func (h *Handler) fillPeerConfigViews(d *deviceDetailView, tunnelIP uint32) {

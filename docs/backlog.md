@@ -1,6 +1,6 @@
 # PetrikVPN backlog (post iOS Step 5)
 
-Last updated: 2026-11-17
+Last updated: 2026-11-19
 
 ## Done (iOS path)
 
@@ -17,6 +17,14 @@ Last updated: 2026-11-17
 4. ~~**Stability tests**~~ — sleep 6h, Wi‑Fi gap 15m, airplane, force-quit; cellular handoff still open when roaming OK.
 5. ~~**Admin traffic counters**~~ — fixed: vpn-api syncs `wg` peer RX/TX + handshake into MySQL every 15s and on device detail load.
 6. ~~**Connect UI handshake / RX/TX**~~ — session stats on Home (1s poll) + overall Statistics screen.
+7. **Privacy leftovers (before App Store submit)**
+   - App: bundle Inter and JetBrains Mono so `google_fonts` does not fetch from Google at runtime. Drop `api.country.is` and `api.ipify.org`; show country only from our API.
+   - Policy on petrixon.com (not in this repo): unqualified Guideline 5.4 commitment (do not sell, use, or disclose user data to third parties for any purpose). Hosting stays a separate sentence (servers we operate in Germany). Retention: device records until a deletion request; peer stat samples 365 days; say `last_client_ip` / country are stored on the device record. Deletion replies within 30 days.
+   - App Store Connect, after the policy is live: App Privacy declares only device / technical data, not used for tracking, not sold, no third-party partners. Privacy Policy URL stays `https://petrixon.com/vpn/privacy/`.
+8. **Terms of Use leftovers (before App Store submit)**
+   - Terms on petrixon.com already match the free app (acceptable use, VPN limits, no account, liability, Slovak law). Do not add subscription, billing, renewal, cancellation, or refund sections until there is a paid plan.
+   - EULA choice: leave the App Store Connect EULA field empty so Apple’s standard EULA applies, or attach `https://petrixon.com/vpn/terms/` and add the Schedule 2 clauses to section 9: support and warranties sit with Petrixon; Apple refunds the purchase price if a warranty fails; Petrixon handles intellectual-property claims; Apple is a third-party beneficiary and can enforce the terms.
+   - Auto-renewable subscriptions only: functional in-app links to both the privacy policy and the Terms of Use, plus the same terms link in the App Store description or EULA field. Not required for this release.
 
 ## Nice-to-have
 

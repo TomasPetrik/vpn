@@ -18,6 +18,8 @@ Status: **Proposed.** The base URL is `https://vpn.radarcut.com/api/v1`. All bod
 | GET | `/app/config` | none | Update policy (force or soft upgrade) for this platform and build |
 | POST | `/devices/register` | optional | Recognize or create the device and user, issue a token |
 | GET | `/me` | * | Current user and device |
+| GET | `/devices/me/usage` | * | Bandwidth series for the authenticated device |
+| POST | `/devices/me/diagnostics` | * | Upload a diagnostic report (connect log) for this device |
 | PUT | `/devices/me/peer` | * | Provision or update the WireGuard peer, return the VPN config |
 | GET | `/devices/me/peer` | * | Current VPN config (404 if none) |
 | GET | `/servers` | * | Basic server information |
@@ -120,6 +122,33 @@ Rules:
 - The same key returns the same peer and IP. A new key replaces the old key and keeps the IP.
 - The client sets its WireGuard endpoint to the local wstunnel listener (`127.0.0.1:<port>`).
 - `server_ips` lets the client connect without DNS while the tunnel is starting, using SNI and Host `vpn.radarcut.com`.
+
+### `POST /devices/me/diagnostics`
+
+Uploads a diagnostic report for the authenticated device (shown under that device in `/admin/devices/{id}`). Body max 256 KiB.
+
+```json
+{
+  "summary": "Connect log · 12 lines",
+  "meta": { "generated_at": "2026-11-18T20:00:00Z" },
+  "app": { "version": "1.0.1", "build": "2" },
+  "device": { "platform": "ios", "model": "iPhone" },
+  "vpn": { "phase": "skeletonConnected", "connected": true },
+  "log": [
+    { "at": "2026-11-18T20:00:01Z", "message": "Connect tapped" }
+  ]
+}
+```
+
+Response `201`:
+
+```json
+{
+  "id": "0193f1e2-...",
+  "created_at": "2026-11-18T20:00:02.123Z",
+  "summary": "Connect log · 12 lines"
+}
+```
 
 ### `GET /servers`
 

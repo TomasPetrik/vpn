@@ -172,6 +172,7 @@ func runServe(log *slog.Logger) error {
 	mux.Handle("GET /api/v1/me", auth(http.HandlerFunc(deviceH.Me)))
 	mux.Handle("GET /api/v1/servers", auth(http.HandlerFunc(serverH.List)))
 	mux.Handle("GET /api/v1/devices/me/usage", auth(http.HandlerFunc(deviceH.Usage)))
+	mux.Handle("POST /api/v1/devices/me/diagnostics", auth(http.HandlerFunc(deviceH.SubmitDiagnostics)))
 	mux.Handle("PUT /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Upsert)))
 	mux.Handle("GET /api/v1/devices/me/peer", auth(http.HandlerFunc(peerH.Get)))
 

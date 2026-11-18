@@ -7,6 +7,7 @@ import '../../vpn/domain/usage_series.dart';
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
 import '../domain/device_session.dart';
+import '../domain/diagnostic_report.dart';
 import '../domain/public_network_info.dart';
 import '../domain/vpn_peer_config.dart';
 import 'device_api.dart';
@@ -121,6 +122,15 @@ class DeviceRepositoryImpl implements DeviceRepository {
     await ensureSession();
     final data = await api.usage(range: range);
     return UsageSeries.fromJson(data);
+  }
+
+  @override
+  Future<DiagnosticReportResult> submitDiagnostics(
+    Map<String, dynamic> body,
+  ) async {
+    await ensureSession();
+    final data = await api.submitDiagnostics(body);
+    return DiagnosticReportResult.fromJson(data);
   }
 
   @override

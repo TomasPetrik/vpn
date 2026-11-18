@@ -820,7 +820,7 @@ class _TelemetryGrid extends StatelessWidget {
                 : VpnStatsFormat.bytes(
                     visual == _HubVisualState.connected ? rx : 0,
                   ),
-            sparkline: _SparklineStyle.download,
+            samples: connect.rxMbpsHistory,
           ),
         ),
         const SizedBox(width: 8),
@@ -862,15 +862,13 @@ class _TelemetryGrid extends StatelessWidget {
                 : VpnStatsFormat.bytes(
                     visual == _HubVisualState.connected ? tx : 0,
                   ),
-            sparkline: _SparklineStyle.upload,
+            samples: connect.txMbpsHistory,
           ),
         ),
       ],
     );
   }
 }
-
-enum _SparklineStyle { download, upload }
 
 class _TelemetryCard extends StatelessWidget {
   const _TelemetryCard({
@@ -884,7 +882,7 @@ class _TelemetryCard extends StatelessWidget {
     required this.badgeColor,
     required this.footerLabel,
     required this.footerValue,
-    required this.sparkline,
+    required this.samples,
   });
 
   final String title;
@@ -897,7 +895,7 @@ class _TelemetryCard extends StatelessWidget {
   final Color badgeColor;
   final String footerLabel;
   final String footerValue;
-  final _SparklineStyle sparkline;
+  final List<double> samples;
 
   @override
   Widget build(BuildContext context) {
@@ -976,7 +974,7 @@ class _TelemetryCard extends StatelessWidget {
             width: double.infinity,
             child: CustomPaint(
               painter: _SparklinePainter(
-                style: sparkline,
+                samples: samples,
                 visual: visual,
                 color: accent,
               ),
@@ -1478,18 +1476,18 @@ class _StatusDotState extends State<_StatusDot>
 
 class _SparklinePainter extends CustomPainter {
   _SparklinePainter({
-    required this.style,
+    required this.samples,
     required this.visual,
     required this.color,
   });
 
-  final _SparklineStyle style;
+  final List<double> samples;
   final _HubVisualState visual;
   final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (visual == _HubVisualState.disconnected) {
+    if (visual != _HubVisualState.connected || samples.length < 2) {
       final paint = Paint()
         ..color = CyberShieldColors.outlineVariant
         ..strokeWidth = 1.5
@@ -1499,21 +1497,16 @@ class _SparklinePainter extends CustomPainter {
       return;
     }
 
-    final points = style == _SparklineStyle.download
-        ? <Offset>[
-            Offset(0, size.height * 0.8),
-            Offset(size.width * 0.25, size.height * 0.4),
-            Offset(size.width * 0.5, size.height * 0.45),
-            Offset(size.width * 0.75, size.height * 0.2),
-            Offset(size.width, size.height * 0.3),
-          ]
-        : <Offset>[
-            Offset(0, size.height * 0.9),
-            Offset(size.width * 0.3, size.height * 0.6),
-            Offset(size.width * 0.55, size.height * 0.45),
-            Offset(size.width * 0.8, size.height * 0.55),
-            Offset(size.width, size.height * 0.25),
-          ];
+    final peak = samples.fold<double>(0, math.max);
+    final maxV = math.max(peak, 0.5);
+    final last = samples.length - 1;
+    final points = <Offset>[
+      for (var i = 0; i < samples.length; i++)
+        Offset(
+          last == 0 ? 0 : size.width * (i / last),
+          size.height * (1 - (samples[i].clamp(0, maxV) / maxV) * 0.92),
+        ),
+    ];
 
     final path = Path()..moveTo(points.first.dx, points.first.dy);
     for (var i = 1; i < points.length; i++) {
@@ -1534,7 +1527,7 @@ class _SparklinePainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          color.withValues(alpha: visual == _HubVisualState.connecting ? 0.35 : 0.5),
+          color.withValues(alpha: 0.5),
           color.withValues(alpha: 0),
         ],
       ).createShader(Offset.zero & size);
@@ -1542,9 +1535,10 @@ class _SparklinePainter extends CustomPainter {
 
     final stroke = Paint()
       ..color = color
-      ..strokeWidth = visual == _HubVisualState.connected ? 2 : 1.5
+      ..strokeWidth = 2
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
     canvas.drawPath(path, stroke);
   }
 
@@ -1563,10 +1557,20 @@ class _SparklinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SparklinePainter oldDelegate) =>
-      oldDelegate.visual != visual ||
-      oldDelegate.style != style ||
-      oldDelegate.color != color;
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    if (oldDelegate.visual != visual || oldDelegate.color != color) {
+      return true;
+    }
+    if (oldDelegate.samples.length != samples.length) {
+      return true;
+    }
+    for (var i = 0; i < samples.length; i++) {
+      if (oldDelegate.samples[i] != samples[i]) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 class _SoftUpdateBanner extends StatelessWidget {

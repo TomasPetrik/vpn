@@ -12,6 +12,7 @@ import '../features/device/presentation/bootstrap_cubit.dart';
 import '../features/device/presentation/splash_page.dart';
 import '../features/servers/presentation/server_info_cubit.dart';
 import '../features/shell/presentation/main_shell.dart';
+import '../features/settings/presentation/settings_page.dart';
 import '../features/vpn/presentation/home_page.dart';
 import '../features/vpn/presentation/vpn_connect_cubit.dart';
 import '../features/vpn/presentation/vpn_stats_page.dart';
@@ -78,6 +79,14 @@ GoRouter createRouter({
                   value: getIt<VpnConnectCubit>(),
                   child: const VpnStatsPage(),
                 ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const SettingsPage(),
               ),
             ],
           ),

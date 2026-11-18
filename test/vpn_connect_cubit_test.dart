@@ -247,6 +247,9 @@ void main() {
     expect(cubit.state.rxBytes, 2_250_000);
     expect(cubit.state.rxMbps, greaterThan(5));
     expect(cubit.state.txMbps, 0);
+    expect(cubit.state.rxMbpsHistory, isNotEmpty);
+    expect(cubit.state.rxMbpsHistory.last, cubit.state.rxMbps);
+    expect(cubit.state.txMbpsHistory, isNotEmpty);
     await cubit.close();
   });
 

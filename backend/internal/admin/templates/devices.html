@@ -168,6 +168,33 @@
         </details>
         {{end}}
       </div>
+
+      <div class="card">
+        <h2>Diagnostic reports</h2>
+        <p class="muted" style="margin:0;font-size:.85rem">
+          Submitted from the app Settings screen (connect log + device metadata). Newest first.
+        </p>
+        {{if .Device.Diagnostics}}
+        {{range .Device.Diagnostics}}
+        <details class="panel-item">
+          <summary>
+            {{if .Summary}}{{.Summary}}{{else}}Diagnostic report{{end}}
+            <span class="muted" style="font-weight:400;font-size:.85rem">
+              · {{.CreatedAt}}{{if .AppVersion}} · {{.AppVersion}}{{if .AppBuild}} ({{.AppBuild}}){{end}}{{end}}{{if .ClientIP}} · {{.ClientIP}}{{end}}
+            </span>
+          </summary>
+          <div class="panel-body">
+            <p class="muted" style="font-size:.85rem;margin:.25rem 0 .5rem">
+              <code>{{.ID}}</code>{{if .Platform}} · {{.Platform}}{{end}}
+            </p>
+            <pre class="code">{{.PayloadJSON}}</pre>
+          </div>
+        </details>
+        {{end}}
+        {{else}}
+        <p class="muted" style="margin:.75rem 0 0">No diagnostic reports from this device yet.</p>
+        {{end}}
+      </div>
     </div>
     {{else}}
     <div class="empty-detail">

@@ -45,9 +45,14 @@ class VpnConnectState {
     this.sessionSeconds = 0,
     this.rxMbps = 0,
     this.txMbps = 0,
+    this.rxMbpsHistory = const [],
+    this.txMbpsHistory = const [],
     this.latencyMs,
     this.committedTotals = const VpnUsageTotals.zero(),
   });
+
+  /// Rolling window length for home-screen Mbps sparklines (~1 sample/sec).
+  static const int mbpsHistoryLength = 30;
 
   final VpnConnectPhase phase;
   final String stepLabel;
@@ -65,6 +70,12 @@ class VpnConnectState {
 
   /// Instantaneous upload rate from WireGuard counter deltas (Mbps).
   final double txMbps;
+
+  /// Recent download Mbps samples (oldest → newest) for the home sparkline.
+  final List<double> rxMbpsHistory;
+
+  /// Recent upload Mbps samples (oldest → newest) for the home sparkline.
+  final List<double> txMbpsHistory;
 
   /// Latest TCP-connect RTT through the tunnel, in milliseconds.
   final int? latencyMs;
@@ -111,6 +122,8 @@ class VpnConnectState {
     int? sessionSeconds,
     double? rxMbps,
     double? txMbps,
+    List<double>? rxMbpsHistory,
+    List<double>? txMbpsHistory,
     int? latencyMs,
     VpnUsageTotals? committedTotals,
     bool clearError = false,
@@ -118,6 +131,7 @@ class VpnConnectState {
     bool clearTraffic = false,
     bool clearSession = false,
   }) {
+    final clearRates = clearTraffic || clearSession;
     return VpnConnectState(
       phase: phase ?? this.phase,
       stepLabel: stepLabel ?? this.stepLabel,
@@ -131,11 +145,13 @@ class VpnConnectState {
       sessionStartedAt:
           clearSession ? null : (sessionStartedAt ?? this.sessionStartedAt),
       sessionSeconds: clearSession ? 0 : (sessionSeconds ?? this.sessionSeconds),
-      rxMbps: clearTraffic || clearSession ? 0 : (rxMbps ?? this.rxMbps),
-      txMbps: clearTraffic || clearSession ? 0 : (txMbps ?? this.txMbps),
-      latencyMs: clearTraffic || clearSession
-          ? null
-          : (latencyMs ?? this.latencyMs),
+      rxMbps: clearRates ? 0 : (rxMbps ?? this.rxMbps),
+      txMbps: clearRates ? 0 : (txMbps ?? this.txMbps),
+      rxMbpsHistory:
+          clearRates ? const [] : (rxMbpsHistory ?? this.rxMbpsHistory),
+      txMbpsHistory:
+          clearRates ? const [] : (txMbpsHistory ?? this.txMbpsHistory),
+      latencyMs: clearRates ? null : (latencyMs ?? this.latencyMs),
       committedTotals: committedTotals ?? this.committedTotals,
     );
   }
@@ -338,12 +354,17 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     }
     _prevTrafficSampleAt = now;
 
+    final rxHistory = _pushMbpsSample(state.rxMbpsHistory, rxMbps);
+    final txHistory = _pushMbpsSample(state.txMbpsHistory, txMbps);
+
     final same = state.rxBytes == snap.rxBytes &&
         state.txBytes == snap.txBytes &&
         state.lastHandshakeAt == snap.lastHandshakeAt &&
         state.sessionSeconds == elapsed &&
         state.rxMbps == rxMbps &&
-        state.txMbps == txMbps;
+        state.txMbps == txMbps &&
+        _sameMbpsHistory(state.rxMbpsHistory, rxHistory) &&
+        _sameMbpsHistory(state.txMbpsHistory, txHistory);
     if (same) {
       return;
     }
@@ -356,6 +377,8 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         sessionSeconds: elapsed,
         rxMbps: rxMbps,
         txMbps: txMbps,
+        rxMbpsHistory: rxHistory,
+        txMbpsHistory: txHistory,
       ),
     );
     await _usageStatsStore.writeInflight(
@@ -363,6 +386,30 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       txBytes: snap.txBytes ?? state.txBytes ?? 0,
       activeSeconds: elapsed,
     );
+  }
+
+  static List<double> _pushMbpsSample(List<double> current, double value) {
+    final next = List<double>.of(current)..add(value);
+    final overflow = next.length - VpnConnectState.mbpsHistoryLength;
+    if (overflow > 0) {
+      next.removeRange(0, overflow);
+    }
+    return List<double>.unmodifiable(next);
+  }
+
+  static bool _sameMbpsHistory(List<double> a, List<double> b) {
+    if (identical(a, b)) {
+      return true;
+    }
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static double _instantMbps({
