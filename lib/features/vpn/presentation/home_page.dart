@@ -154,10 +154,16 @@ class _HubHeader extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(20, top + 8, 20, 12),
         child: Row(
           children: [
-            const Icon(
-              Icons.shield_outlined,
-              size: 28,
-              color: CyberShieldColors.secondaryContainer,
+            Image.asset(
+              'assets/branding/header_mark.png',
+              height: 28,
+              width: 28,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.shield_outlined,
+                size: 28,
+                color: CyberShieldColors.secondaryContainer,
+              ),
             ),
             const SizedBox(width: 8),
             Text(
