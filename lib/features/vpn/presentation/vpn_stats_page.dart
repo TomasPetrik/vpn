@@ -251,7 +251,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: _MetricCard(
                                 label: 'Time Shielded',
@@ -273,7 +273,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       SizedBox(
                         height: _analyticsCardHeight,
                         child: Row(
@@ -289,7 +289,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                                 avgPerDay: avgRxPerDay,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: _TrafficShareCard(
                                 label: 'Upload',
@@ -303,7 +303,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       _BandwidthPulseCard(
                         period: _period,
                         series: _usage,
@@ -324,7 +324,8 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
   }
 
   /// Shared height so Total / Time / Download / Upload tiles stay equal.
-  static const double _analyticsCardHeight = 136;
+  /// Kept compact so Bandwidth Pulse x-axis labels fit on small phones.
+  static const double _analyticsCardHeight = 108;
 
   static (String, String) _splitBytes(int bytes) {
     final formatted = VpnStatsFormat.bytes(bytes);
@@ -420,7 +421,7 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -434,20 +435,23 @@ class _MetricCard extends StatelessWidget {
                 child: Text(label.toUpperCase(), style: CyberShieldTheme.labelBadge()),
               ),
               Container(
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: CyberShieldColors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Icon(icon, size: 16, color: iconColor),
+                child: Icon(icon, size: 14, color: iconColor),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           value,
           const Spacer(),
-          footer,
+          DefaultTextStyle.merge(
+            style: CyberShieldTheme.bodySm().copyWith(fontSize: 11, height: 1.2),
+            child: footer,
+          ),
         ],
       ),
     );
@@ -466,7 +470,13 @@ class _MetricValue extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(value, style: CyberShieldTheme.metricStat()),
+        Text(
+          value,
+          style: CyberShieldTheme.metricStat().copyWith(
+            fontSize: 22,
+            height: 26 / 22,
+          ),
+        ),
         const SizedBox(width: 4),
         Text(
           unit,
@@ -491,12 +501,18 @@ class _DurationValue extends StatelessWidget {
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: '${h}h', style: CyberShieldTheme.metricStat()),
+          TextSpan(
+            text: '${h}h',
+            style: CyberShieldTheme.metricStat().copyWith(
+              fontSize: 22,
+              height: 26 / 22,
+            ),
+          ),
           TextSpan(
             text: ' ${m.toString().padLeft(2, '0')}m',
             style: CyberShieldTheme.headlineSm(
               color: CyberShieldColors.onSurfaceVariant,
-            ),
+            ).copyWith(fontSize: 16, height: 20 / 16),
           ),
         ],
       ),
@@ -530,7 +546,7 @@ class _TrafficShareCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -544,23 +560,26 @@ class _TrafficShareCard extends StatelessWidget {
                 child: Text(label.toUpperCase(), style: CyberShieldTheme.labelBadge()),
               ),
               Container(
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: CyberShieldColors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Icon(icon, size: 16, color: accent),
+                child: Icon(icon, size: 14, color: accent),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text.rich(
             TextSpan(
               children: [
                 TextSpan(
                   text: value,
-                  style: CyberShieldTheme.metricStat(),
+                  style: CyberShieldTheme.metricStat().copyWith(
+                    fontSize: 22,
+                    height: 26 / 22,
+                  ),
                 ),
                 TextSpan(
                   text: ' $unit',
@@ -576,17 +595,17 @@ class _TrafficShareCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: share.clamp(0.0, 1.0),
-              minHeight: 6,
+              minHeight: 4,
               backgroundColor: CyberShieldColors.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation(accent),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
               'Avg ${VpnStatsFormat.bytes(avgPerDay.round())}/d',
-              style: CyberShieldTheme.labelCode(color: accent),
+              style: CyberShieldTheme.labelCode(color: accent).copyWith(fontSize: 10),
             ),
           ),
         ],

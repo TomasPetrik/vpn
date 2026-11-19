@@ -39,57 +39,76 @@ class HomePage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: CyberShieldColors.background,
-      body: BlocBuilder<VpnConnectCubit, VpnConnectState>(
-        builder: (context, connect) {
-          final visual = _visualFor(connect);
-          return Column(
-            children: [
-              _HubHeader(visual: visual),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
-                  children: [
-                    BlocBuilder<AppUpdateCubit, AppUpdateState>(
-                      builder: (context, state) {
-                        if (state is! AppUpdateAvailable) {
-                          return const SizedBox.shrink();
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _SoftUpdateBanner(
-                            message: state.policy.message.isEmpty ? 'Update available' : state.policy.message,
-                            storeUrl: AppStoreLinks.resolve(
-                              policyUrl: state.policy.updateUrl,
-                              isIos: defaultTargetPlatform == TargetPlatform.iOS,
-                            ),
-                            onDismiss: () => context.read<AppUpdateCubit>().dismissSoftUpdate(),
-                          ),
-                        );
-                      },
-                    ),
-                    _HeroCard(connect: connect, visual: visual),
-                    const SizedBox(height: 8),
-                    _TelemetryGrid(connect: connect, visual: visual),
-                    const SizedBox(height: 8),
-                    _ServerDetailCard(connect: connect, visual: visual),
-                    if (connect.errorMessage != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        connect.errorMessage!,
-                        style: CyberShieldTheme.bodySm(color: CyberShieldColors.error),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                    if (isDevMode && connect.log.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      TextButton(onPressed: () => _showConnectLog(context, connect), child: const Text('Connect log')),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+      body: BlocListener<VpnConnectCubit, VpnConnectState>(
+        listenWhen: (previous, current) =>
+            current.errorMessage != null &&
+            current.errorMessage != previous.errorMessage,
+        listener: (context, state) {
+          final message = state.errorMessage;
+          if (message == null || message.isEmpty) {
+            return;
+          }
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(message),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
+              backgroundColor: CyberShieldColors.errorContainer,
+            ),
           );
         },
+        child: BlocBuilder<VpnConnectCubit, VpnConnectState>(
+          builder: (context, connect) {
+            final visual = _visualFor(connect);
+            return Column(
+              children: [
+                _HubHeader(visual: visual),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 10),
+                    children: [
+                      BlocBuilder<AppUpdateCubit, AppUpdateState>(
+                        builder: (context, state) {
+                          if (state is! AppUpdateAvailable) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _SoftUpdateBanner(
+                              message: state.policy.message.isEmpty
+                                  ? 'Update available'
+                                  : state.policy.message,
+                              storeUrl: AppStoreLinks.resolve(
+                                policyUrl: state.policy.updateUrl,
+                                isIos: defaultTargetPlatform == TargetPlatform.iOS,
+                              ),
+                              onDismiss: () =>
+                                  context.read<AppUpdateCubit>().dismissSoftUpdate(),
+                            ),
+                          );
+                        },
+                      ),
+                      _HeroCard(connect: connect, visual: visual),
+                      const SizedBox(height: 8),
+                      _TelemetryGrid(connect: connect, visual: visual),
+                      const SizedBox(height: 8),
+                      _ServerDetailCard(connect: connect, visual: visual),
+                      if (isDevMode && connect.log.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        TextButton(
+                          onPressed: () => _showConnectLog(context, connect),
+                          child: const Text('Connect log'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -778,8 +797,15 @@ class _TelemetryCard extends StatelessWidget {
             children: [
               Icon(icon, size: 16, color: muted ? CyberShieldColors.outline : accent),
               const SizedBox(width: 4),
-              Text(title.toUpperCase(), style: CyberShieldTheme.labelBadge()),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  title.toUpperCase(),
+                  style: CyberShieldTheme.labelBadge(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
@@ -791,7 +817,12 @@ class _TelemetryCard extends StatelessWidget {
                       ? Border.all(color: badgeColor.withValues(alpha: 0.2))
                       : null,
                 ),
-                child: Text(badge, style: CyberShieldTheme.labelCode(color: badgeColor)),
+                child: Text(
+                  badge,
+                  style: CyberShieldTheme.labelCode(color: badgeColor),
+                  maxLines: 1,
+                  softWrap: false,
+                ),
               ),
             ],
           ),
