@@ -43,20 +43,27 @@ end
 
   settings['LIBRARY_SEARCH_PATHS'] = Array(settings['LIBRARY_SEARCH_PATHS']).flatten
   settings['LIBRARY_SEARCH_PATHS'] << '$(inherited)' unless settings['LIBRARY_SEARCH_PATHS'].include?('$(inherited)')
-  lib_path = '$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64'
-  settings['LIBRARY_SEARCH_PATHS'] << lib_path unless settings['LIBRARY_SEARCH_PATHS'].include?(lib_path)
+  # Device + Simulator slices (Xcode picks the matching arch when both are listed).
+  %w[
+    $(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64
+    $(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64_x86_64-simulator
+  ].each do |lib_path|
+    settings['LIBRARY_SEARCH_PATHS'] << lib_path unless settings['LIBRARY_SEARCH_PATHS'].include?(lib_path)
+  end
 
+  # Shared headers (identical across slices; stable path outside the xcframework).
   settings['HEADER_SEARCH_PATHS'] = Array(settings['HEADER_SEARCH_PATHS']).flatten
   settings['HEADER_SEARCH_PATHS'] << '$(inherited)' unless settings['HEADER_SEARCH_PATHS'].include?('$(inherited)')
-  hdr = '$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers'
+  hdr = '$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include'
   settings['HEADER_SEARCH_PATHS'] << hdr unless settings['HEADER_SEARCH_PATHS'].include?(hdr)
 
   settings['SWIFT_INCLUDE_PATHS'] = Array(settings['SWIFT_INCLUDE_PATHS']).flatten
   settings['SWIFT_INCLUDE_PATHS'] << hdr unless settings['SWIFT_INCLUDE_PATHS'].include?(hdr)
 
   settings['OTHER_SWIFT_FLAGS'] = Array(settings['OTHER_SWIFT_FLAGS']).flatten
-  flag = '-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap'
-  settings['OTHER_SWIFT_FLAGS'] << flag unless settings['OTHER_SWIFT_FLAGS'].any? { |f| f.to_s.include?('WstunnelFFI') }
+  flag = '-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include/module.modulemap'
+  settings['OTHER_SWIFT_FLAGS'] = settings['OTHER_SWIFT_FLAGS'].reject { |f| f.to_s.include?('WstunnelFFI') || f.to_s.include?('wstunnel_ffi') }
+  settings['OTHER_SWIFT_FLAGS'] << flag
 
   # Needed for Rust staticlib (atomics / unwind)
   %w[-lc++ -framework Security -framework SystemConfiguration].each do |flag|

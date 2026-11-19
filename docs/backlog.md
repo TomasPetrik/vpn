@@ -31,5 +31,5 @@ Last updated: 2026-11-19
 ## Nice-to-have
 
 - ~~Soft update banner CTA~~ — Update + dismiss; temp App Store link until PetrikVPN listing exists
-- Sim slice for WstunnelFFI XCFramework (device-only today)
+- ~~Sim slice for WstunnelFFI XCFramework~~ — `build_ios.sh` now ships device + Simulator (arm64/x86_64)
 - Replace temp App Store URL with real PetrikVPN listing

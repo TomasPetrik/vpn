@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -98,11 +98,11 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9ADE62E4B2435F9F2E2C07C8 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* VpnEngineChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VpnEngineChannel.swift; sourceTree = "<group>"; };
-		A37F9ADC5A2F3FCDB766F920 /* WstunnelFFI.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; name = WstunnelFFI.xcframework; path = ThirdParty/WstunnelFFI/WstunnelFFI.xcframework; sourceTree = "<group>"; };
+		A37F9ADC5A2F3FCDB766F920 /* WstunnelFFI.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; name = WstunnelFFI.xcframework; path = ThirdParty/WstunnelFFI/WstunnelFFI.xcframework; sourceTree = "<group>"; };
 		A8AA2ADA519FA2E95FD31A2B /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		E0CF511FF6E24E66CC01542A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E6D45847798055275D02E30F /* PacketTunnel.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = PacketTunnel.entitlements; sourceTree = "<group>"; };
-		F28A4F7BFA9979C9BC891814 /* PacketTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; name = PacketTunnel.appex; path = PacketTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F28A4F7BFA9979C9BC891814 /* PacketTunnel.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PacketTunnel.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F34F3980D361D2DDBCDED6C1 /* PacketTunnelProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PacketTunnelProvider.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -234,7 +234,6 @@
 				E0CF511FF6E24E66CC01542A /* Info.plist */,
 				E6D45847798055275D02E30F /* PacketTunnel.entitlements */,
 			);
-			name = PacketTunnel;
 			path = PacketTunnel;
 			sourceTree = "<group>";
 		};
@@ -352,7 +351,7 @@
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
-				39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */,
+				39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -403,9 +402,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -872,7 +875,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include",
 				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
@@ -885,6 +888,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64_x86_64-simulator",
 				);
 				MARKETING_VERSION = 1.0.1;
 				OTHER_LDFLAGS = (
@@ -896,13 +900,13 @@
 					"-framework",
 					SystemConfiguration,
 				);
-				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -915,13 +919,12 @@
 				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				/* dsymutil crashes on PacketTunnel linked with stripped Rust staticlib */
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 56S59F5D36;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include",
 				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
@@ -934,6 +937,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64_x86_64-simulator",
 				);
 				MARKETING_VERSION = 1.0.1;
 				OTHER_LDFLAGS = (
@@ -945,13 +949,13 @@
 					"-framework",
 					SystemConfiguration,
 				);
-				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -972,13 +976,12 @@
 				CODE_SIGN_ENTITLEMENTS = PacketTunnel/PacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
-				/* dsymutil crashes on PacketTunnel linked with stripped Rust staticlib */
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 56S59F5D36;
 				GENERATE_INFOPLIST_FILE = NO;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include",
 				);
 				INFOPLIST_FILE = PacketTunnel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "PetrikVPN Tunnel";
@@ -991,6 +994,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64",
+					"$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64_x86_64-simulator",
 				);
 				MARKETING_VERSION = 1.0.1;
 				OTHER_LDFLAGS = (
@@ -1002,13 +1006,13 @@
 					"-framework",
 					SystemConfiguration,
 				);
-				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers/module.modulemap";
+				OTHER_SWIFT_FLAGS = "-Xcc -fmodule-map-file=$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = cz.tomaspetrik.petrikvpn.PacketTunnel;
 				PRODUCT_NAME = PacketTunnel;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/WstunnelFFI.xcframework/ios-arm64/Headers";
+				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)/ThirdParty/WstunnelFFI/include";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -1071,7 +1075,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */ = {
+		39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "ThirdParty/wireguard-apple";
 		};
@@ -1080,7 +1084,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		1C132D0520D73C1F2D68A19D /* WireGuardKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */;
+			package = 39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */;
 			productName = WireGuardKit;
 		};
 /* End XCSwiftPackageProductDependency section */

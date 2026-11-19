@@ -324,7 +324,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
   }
 
   /// Shared height so Total / Time / Download / Upload tiles stay equal.
-  static const double _analyticsCardHeight = 124;
+  static const double _analyticsCardHeight = 136;
 
   static (String, String) _splitBytes(int bytes) {
     final formatted = VpnStatsFormat.bytes(bytes);
@@ -420,7 +420,7 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -444,7 +444,7 @@ class _MetricCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           value,
           const Spacer(),
           footer,
@@ -530,7 +530,7 @@ class _TrafficShareCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
@@ -554,7 +554,7 @@ class _TrafficShareCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text.rich(
             TextSpan(
               children: [
@@ -581,7 +581,7 @@ class _TrafficShareCard extends StatelessWidget {
               valueColor: AlwaysStoppedAnimation(accent),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
@@ -1460,10 +1460,10 @@ class _SessionLedger extends StatelessWidget {
           children: [
             const Icon(Icons.history, size: 18, color: CyberShieldColors.onSurface),
             const SizedBox(width: 6),
-            Text('Session Ledger', style: CyberShieldTheme.headlineSm()),
+            Text('Current session', style: CyberShieldTheme.headlineSm()),
             const Spacer(),
             Text(
-              livePeer != null ? 'Live' : 'No active session',
+              livePeer != null ? 'Connected' : 'Not connected',
               style: CyberShieldTheme.labelBadge(
                 color: CyberShieldColors.secondaryContainer,
               ),
@@ -1475,7 +1475,7 @@ class _SessionLedger extends StatelessWidget {
           _SessionRow(
             title: livePeer.server.name,
             subtitle:
-                '${livePeer.server.countryCode ?? '—'} • WireGuard • ${_ip(livePeer)}',
+                '${livePeer.server.countryCode ?? '—'} · ${_ip(livePeer)}',
             bytesLabel: VpnStatsFormat.bytes(sessionBytes),
             durationLabel: VpnStatsFormat.duration(state.sessionSeconds),
             active: true,
@@ -1490,23 +1490,10 @@ class _SessionLedger extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              'Connect to start an encrypted session. Totals above include committed history.',
+              'Connect to protect your traffic. Past usage still shows in the totals above.',
               style: CyberShieldTheme.bodySm(),
             ),
           ),
-        if (livePeer == null && state.overallTotals.activeSeconds > 0) ...[
-          const SizedBox(height: 8),
-          _SessionRow(
-            title: 'Previous shielded time',
-            subtitle: 'Committed totals',
-            bytesLabel: VpnStatsFormat.bytes(
-              state.overallTotals.rxBytes + state.overallTotals.txBytes,
-            ),
-            durationLabel:
-                VpnStatsFormat.duration(state.overallTotals.activeSeconds),
-            active: false,
-          ),
-        ],
       ],
     );
   }
