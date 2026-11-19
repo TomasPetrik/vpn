@@ -12,6 +12,7 @@ import '../../device/domain/vpn_peer_config.dart';
 import '../domain/usage_series.dart';
 import 'home/country_flag.dart';
 import 'vpn_connect_cubit.dart';
+import 'vpn_stats_chart_axis.dart';
 import 'vpn_stats_format.dart';
 
 enum _StatsPeriod { today, days7, days30, all }
@@ -386,10 +387,10 @@ class _PeriodSelector extends StatelessWidget {
       ),
       child: Row(
         children: [
-          tab(_StatsPeriod.today, 'Today'),
-          tab(_StatsPeriod.days7, 'Last 7 Days'),
-          tab(_StatsPeriod.days30, 'Last 30 Days'),
-          tab(_StatsPeriod.all, 'All Time'),
+          tab(_StatsPeriod.today, '24h'),
+          tab(_StatsPeriod.days7, '7 Days'),
+          tab(_StatsPeriod.days30, '30 Days'),
+          tab(_StatsPeriod.all, '12 Months'),
         ],
       ),
     );
@@ -609,15 +610,20 @@ class _BandwidthPulseCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      period == _StatsPeriod.today
-                          ? 'Today Bandwidth Pulse'
-                          : 'Daily Bandwidth Pulse',
+                      'Bandwidth Pulse',
                       style: CyberShieldTheme.headlineSm(),
                     ),
                     Text(
-                      period == _StatsPeriod.today
-                          ? 'Hourly usage from server'
-                          : 'Daily usage from server',
+                      switch (period) {
+                        _StatsPeriod.today =>
+                          'Hourly transfer · last 24 hours',
+                        _StatsPeriod.days7 =>
+                          'Daily transfer · last 7 days',
+                        _StatsPeriod.days30 =>
+                          'Daily transfer · last 30 days',
+                        _StatsPeriod.all =>
+                          'Daily transfer · past 12 months',
+                      },
                       style: CyberShieldTheme.bodySm(),
                     ),
                   ],
@@ -734,31 +740,51 @@ class _BandwidthPulseCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           if (points.isNotEmpty)
-            Row(
-              children: [
-                for (var i = 0; i < points.length; i++)
-                  Expanded(
-                    child: Text(
-                      _axisLabel(
-                        point: points[i],
-                        index: i,
-                        count: points.length,
-                        period: period,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      style: CyberShieldTheme.labelCode(
-                        color: i == peakIndex
-                            ? CyberShieldColors.secondaryContainer
-                            : CyberShieldColors.onSurfaceVariant,
-                        weight: i == peakIndex
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                      ).copyWith(fontSize: period == _StatsPeriod.today ? 9 : 10),
-                    ),
-                  ),
-              ],
+            SizedBox(
+              height: 18,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final ticks = VpnStatsChartAxis.ticks(
+                    points: points,
+                    period: switch (period) {
+                      _StatsPeriod.today => VpnStatsChartPeriod.hours24,
+                      _StatsPeriod.days7 => VpnStatsChartPeriod.days7,
+                      _StatsPeriod.days30 => VpnStatsChartPeriod.days30,
+                      _StatsPeriod.all => VpnStatsChartPeriod.months12,
+                    },
+                  );
+                  const labelWidth = 44.0;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (final tick in ticks)
+                        Positioned(
+                          left: VpnStatsChartAxis.tickLeft(
+                            index: tick.index,
+                            count: points.length,
+                            width: constraints.maxWidth,
+                            labelWidth: labelWidth,
+                          ),
+                          width: labelWidth,
+                          child: Text(
+                            tick.label,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: CyberShieldTheme.labelCode(
+                              color: tick.index == peakIndex
+                                  ? CyberShieldColors.secondaryContainer
+                                  : CyberShieldColors.onSurfaceVariant,
+                              weight: tick.index == peakIndex
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ).copyWith(fontSize: 10),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           const SizedBox(height: 8),
           Text(
@@ -783,54 +809,6 @@ class _BandwidthPulseCard extends StatelessWidget {
     return best;
   }
 
-  /// Today → hour ticks (0h, 3h, …). 30d/All → calendar day. 7d → weekday.
-  static String _axisLabel({
-    required UsagePoint point,
-    required int index,
-    required int count,
-    required _StatsPeriod period,
-  }) {
-    switch (period) {
-      case _StatsPeriod.today:
-        // Show every 3 hours so 24 slots stay readable.
-        if (index % 3 != 0 && index != count - 1) {
-          return '';
-        }
-        return '${_hourOf(point)}h';
-      case _StatsPeriod.days30:
-      case _StatsPeriod.all:
-        // Show ~8 day markers across the window.
-        final step = (count / 8).ceil().clamp(1, count);
-        if (index % step != 0 && index != count - 1) {
-          return '';
-        }
-        return _dayOf(point);
-      case _StatsPeriod.days7:
-        return point.label.isNotEmpty ? point.label : _dayOf(point);
-    }
-  }
-
-  static String _hourOf(UsagePoint point) {
-    final fromLabel = RegExp(r'^(\d{1,2})').firstMatch(point.label);
-    if (fromLabel != null) {
-      return int.parse(fromLabel.group(1)!).toString();
-    }
-    final fromDate = RegExp(r'(\d{2}):\d{2}').firstMatch(point.date);
-    if (fromDate != null) {
-      return int.parse(fromDate.group(1)!).toString();
-    }
-    return point.label;
-  }
-
-  static String _dayOf(UsagePoint point) {
-    final match = RegExp(r'(\d{4})-(\d{2})-(\d{2})').firstMatch(point.date);
-    if (match != null) {
-      final month = int.parse(match.group(2)!);
-      final day = int.parse(match.group(3)!);
-      return '$day/$month';
-    }
-    return point.label;
-  }
 }
 
 class _PulseChartPainter extends CustomPainter {
