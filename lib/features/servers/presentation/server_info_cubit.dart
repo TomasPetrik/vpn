@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../vpn/domain/vpn_user_error.dart';
 import '../domain/servers_repository.dart';
 import '../domain/vpn_server.dart';
 
@@ -36,7 +37,7 @@ class ServerInfoCubit extends Cubit<ServerInfoState> {
       final servers = await _repository.list();
       emit(ServerInfoLoaded(servers));
     } catch (e) {
-      emit(ServerInfoError(e.toString()));
+      emit(ServerInfoError(VpnUserError.from(e)));
     }
   }
 }

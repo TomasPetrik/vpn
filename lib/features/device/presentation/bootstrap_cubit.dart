@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../vpn/domain/vpn_user_error.dart';
 import '../domain/device_registration.dart';
 import '../domain/device_repository.dart';
 import '../domain/device_session.dart';
@@ -47,7 +48,7 @@ class BootstrapCubit extends Cubit<BootstrapState> {
         ),
       );
     } catch (e) {
-      emit(BootstrapOffline(e.toString()));
+      emit(BootstrapOffline(VpnUserError.from(e)));
     }
   }
 }

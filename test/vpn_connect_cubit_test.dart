@@ -200,7 +200,9 @@ void main() {
     verify: (cubit) {
       expect(cubit.state.phase, VpnConnectPhase.error);
       expect(cubit.state.log, isNotEmpty);
-      expect(cubit.state.errorMessage, contains('offline'));
+      expect(cubit.state.errorMessage, isNotNull);
+      expect(cubit.state.errorMessage!.toLowerCase(), isNot(contains('exception')));
+      expect(cubit.state.log.last.message, contains('offline'));
     },
   );
 

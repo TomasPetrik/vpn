@@ -7,6 +7,7 @@ import '../../device/domain/vpn_peer_config.dart';
 import '../domain/tunnel_latency_probe.dart';
 import '../domain/vpn_engine.dart';
 import '../domain/vpn_usage_stats.dart';
+import '../domain/vpn_user_error.dart';
 
 enum VpnConnectPhase {
   idle,
@@ -775,7 +776,8 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
           phase: VpnConnectPhase.error,
           stepLabel: 'Connection failed',
           log: List.unmodifiable(lines),
-          errorMessage: e.toString(),
+          // Plain language for the home screen; keep raw `e` in the log above.
+          errorMessage: VpnUserError.from(e),
           clearTraffic: true,
           clearSession: true,
         ),
