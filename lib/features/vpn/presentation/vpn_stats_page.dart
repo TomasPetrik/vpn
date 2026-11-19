@@ -116,9 +116,10 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
     try {
       final series = await getIt<DeviceRepository>().usageSeries(range: range);
       if (!mounted) return;
-      final next = series.points.isEmpty
+      final normalized = series.ensureChartGranularity();
+      final next = normalized.points.isEmpty
           ? UsageSeries.scaffold(range: range)
-          : series;
+          : normalized;
       setState(() {
         _usageCache[range] = next;
         _usageFetched.add(range);
@@ -580,7 +581,7 @@ class _TrafficShareCard extends StatelessWidget {
   }
 }
 
-class _BandwidthPulseCard extends StatelessWidget {
+class _BandwidthPulseCard extends StatefulWidget {
   const _BandwidthPulseCard({
     required this.period,
     required this.series,
@@ -590,10 +591,71 @@ class _BandwidthPulseCard extends StatelessWidget {
   final UsageSeries series;
 
   @override
+  State<_BandwidthPulseCard> createState() => _BandwidthPulseCardState();
+}
+
+enum _PulseChartStyle { lines, columns }
+
+class _BandwidthPulseCardState extends State<_BandwidthPulseCard> {
+  int? _scrubIndex;
+  _PulseChartStyle _style = _PulseChartStyle.lines;
+
+  _StatsPeriod get period => widget.period;
+  UsageSeries get series => widget.series;
+
+  VpnStatsChartPeriod get _chartPeriod => switch (period) {
+        _StatsPeriod.today => VpnStatsChartPeriod.hours24,
+        _StatsPeriod.days7 => VpnStatsChartPeriod.days7,
+        _StatsPeriod.days30 => VpnStatsChartPeriod.days30,
+        _StatsPeriod.all => VpnStatsChartPeriod.months12,
+      };
+
+  @override
+  void didUpdateWidget(covariant _BandwidthPulseCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.period != widget.period ||
+        oldWidget.series.range != widget.series.range ||
+        oldWidget.series.points.length != widget.series.points.length) {
+      _scrubIndex = null;
+    } else if (_scrubIndex != null &&
+        _scrubIndex! >= widget.series.points.length) {
+      _scrubIndex = null;
+    }
+  }
+
+  void _scrubAt(Offset local, double width) {
+    final points = series.points;
+    if (points.isEmpty || width <= 0) {
+      return;
+    }
+    final next = _style == _PulseChartStyle.columns
+        ? VpnStatsChartAxis.indexAtBarX(
+            x: local.dx,
+            width: width,
+            count: points.length,
+          )
+        : VpnStatsChartAxis.indexAtX(
+            x: local.dx,
+            width: width,
+            count: points.length,
+          );
+    if (next == _scrubIndex) {
+      return;
+    }
+    setState(() => _scrubIndex = next);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final points = series.points;
     final peakIndex = _peakIndex(points);
     final total = series.totalBytes;
+    final scrub = (_scrubIndex != null &&
+            _scrubIndex! >= 0 &&
+            _scrubIndex! < points.length)
+        ? points[_scrubIndex!]
+        : null;
+    final activeIndex = scrub != null ? _scrubIndex! : peakIndex;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -622,45 +684,50 @@ class _BandwidthPulseCard extends StatelessWidget {
                         _StatsPeriod.days30 =>
                           'Daily transfer · last 30 days',
                         _StatsPeriod.all =>
-                          'Daily transfer · past 12 months',
+                          'Monthly transfer · past 12 months',
                       },
                       style: CyberShieldTheme.bodySm(),
                     ),
                   ],
                 ),
               ),
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: CyberShieldColors.secondaryContainer,
-                      boxShadow: [
-                        BoxShadow(
-                          color: CyberShieldColors.secondaryContainer
-                              .withValues(alpha: 0.7),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text('Down', style: CyberShieldTheme.labelBadge()),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: CyberShieldColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text('Up', style: CyberShieldTheme.labelBadge()),
-                ],
+              _PulseStyleToggle(
+                style: _style,
+                onChanged: (next) => setState(() => _style = next),
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: CyberShieldColors.secondaryContainer,
+                  boxShadow: [
+                    BoxShadow(
+                      color: CyberShieldColors.secondaryContainer
+                          .withValues(alpha: 0.7),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text('Down', style: CyberShieldTheme.labelBadge()),
+              const SizedBox(width: 10),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: CyberShieldColors.primary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text('Up', style: CyberShieldTheme.labelBadge()),
             ],
           ),
           const SizedBox(height: 12),
@@ -725,12 +792,33 @@ class _BandwidthPulseCard extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: CustomPaint(
-                        painter: _PulseChartPainter(
-                          rxValues: rxValues,
-                          txValues: txValues,
-                          highlightIndex: peakIndex,
-                        ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (details) =>
+                                _scrubAt(details.localPosition, constraints.maxWidth),
+                            onHorizontalDragStart: (details) =>
+                                _scrubAt(details.localPosition, constraints.maxWidth),
+                            onHorizontalDragUpdate: (details) =>
+                                _scrubAt(details.localPosition, constraints.maxWidth),
+                            child: CustomPaint(
+                              painter: _style == _PulseChartStyle.columns
+                                  ? _PulseBarChartPainter(
+                                      rxValues: rxValues,
+                                      txValues: txValues,
+                                      highlightIndex: peakIndex,
+                                      scrubIndex: _scrubIndex,
+                                    )
+                                  : _PulseChartPainter(
+                                      rxValues: rxValues,
+                                      txValues: txValues,
+                                      highlightIndex: peakIndex,
+                                      scrubIndex: _scrubIndex,
+                                    ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -746,12 +834,7 @@ class _BandwidthPulseCard extends StatelessWidget {
                 builder: (context, constraints) {
                   final ticks = VpnStatsChartAxis.ticks(
                     points: points,
-                    period: switch (period) {
-                      _StatsPeriod.today => VpnStatsChartPeriod.hours24,
-                      _StatsPeriod.days7 => VpnStatsChartPeriod.days7,
-                      _StatsPeriod.days30 => VpnStatsChartPeriod.days30,
-                      _StatsPeriod.all => VpnStatsChartPeriod.months12,
-                    },
+                    period: _chartPeriod,
                   );
                   const labelWidth = 44.0;
                   return Stack(
@@ -772,10 +855,10 @@ class _BandwidthPulseCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: CyberShieldTheme.labelCode(
-                              color: tick.index == peakIndex
+                              color: tick.index == activeIndex
                                   ? CyberShieldColors.secondaryContainer
                                   : CyberShieldColors.onSurfaceVariant,
-                              weight: tick.index == peakIndex
+                              weight: tick.index == activeIndex
                                   ? FontWeight.w700
                                   : FontWeight.w500,
                             ).copyWith(fontSize: 10),
@@ -787,12 +870,24 @@ class _BandwidthPulseCard extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 8),
-          Text(
-            total > 0
-                ? 'Total ${VpnStatsFormat.bytes(total)} in selected window'
-                : 'No tunnel traffic in this window yet',
-            style: CyberShieldTheme.bodySm(),
-          ),
+          if (scrub != null)
+            _ScrubDetail(
+              title: VpnStatsChartAxis.detailTitle(
+                point: scrub,
+                period: _chartPeriod,
+              ),
+              rxBytes: scrub.rxBytes,
+              txBytes: scrub.txBytes,
+              onClear: () => setState(() => _scrubIndex = null),
+            )
+          else
+            Text(
+              total > 0
+                  ? 'Total ${VpnStatsFormat.bytes(total)} in selected window · drag chart for detail'
+                  : 'No tunnel traffic in this window yet',
+              style: CyberShieldTheme.bodySm(),
+              textAlign: TextAlign.center,
+            ),
         ],
       ),
     );
@@ -808,7 +903,306 @@ class _BandwidthPulseCard extends StatelessWidget {
     }
     return best;
   }
+}
 
+class _PulseStyleToggle extends StatelessWidget {
+  const _PulseStyleToggle({
+    required this.style,
+    required this.onChanged,
+  });
+
+  final _PulseChartStyle style;
+  final ValueChanged<_PulseChartStyle> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget btn({
+      required _PulseChartStyle value,
+      required IconData icon,
+      required String tooltip,
+    }) {
+      final selected = style == value;
+      return Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: () => onChanged(value),
+          borderRadius: BorderRadius.circular(8),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: 34,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? CyberShieldColors.primaryContainer
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: selected
+                  ? Colors.white
+                  : CyberShieldColors.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          btn(
+            value: _PulseChartStyle.lines,
+            icon: Icons.show_chart,
+            tooltip: 'Line chart',
+          ),
+          btn(
+            value: _PulseChartStyle.columns,
+            icon: Icons.bar_chart,
+            tooltip: 'Column chart',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScrubDetail extends StatelessWidget {
+  const _ScrubDetail({
+    required this.title,
+    required this.rxBytes,
+    required this.txBytes,
+    required this.onClear,
+  });
+
+  final String title;
+  final int rxBytes;
+  final int txBytes;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = rxBytes + txBytes;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: CyberShieldColors.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: CyberShieldTheme.labelCode(
+                    color: CyberShieldColors.secondaryContainer,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      '↓ ${VpnStatsFormat.bytes(rxBytes)}',
+                      style: CyberShieldTheme.labelCode(
+                        color: CyberShieldColors.secondaryContainer,
+                      ),
+                    ),
+                    Text(
+                      '↑ ${VpnStatsFormat.bytes(txBytes)}',
+                      style: CyberShieldTheme.labelCode(
+                        color: CyberShieldColors.primary,
+                      ),
+                    ),
+                    Text(
+                      'Σ ${VpnStatsFormat.bytes(total)}',
+                      style: CyberShieldTheme.labelCode(
+                        color: CyberShieldColors.onSurface,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Clear selection',
+            onPressed: onClear,
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close, size: 18),
+            color: CyberShieldColors.onSurfaceVariant,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseBarChartPainter extends CustomPainter {
+  _PulseBarChartPainter({
+    required this.rxValues,
+    required this.txValues,
+    required this.highlightIndex,
+    this.scrubIndex,
+  });
+
+  final List<double> rxValues;
+  final List<double> txValues;
+  final int highlightIndex;
+  final int? scrubIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const topFrac = 0.08;
+    const midFrac = 0.48;
+    const baseFrac = 0.88;
+    final grid = Paint()
+      ..color = CyberShieldColors.surfaceVariant
+      ..strokeWidth = 0.75
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+    for (final y in [
+      size.height * topFrac,
+      size.height * midFrac,
+      size.height * baseFrac,
+    ]) {
+      _dashLine(canvas, Offset(0, y), Offset(size.width, y), grid);
+    }
+
+    final n = math.min(rxValues.length, txValues.length);
+    if (n == 0) {
+      return;
+    }
+
+    var maxValue = 0.0;
+    for (var i = 0; i < n; i++) {
+      maxValue = math.max(maxValue, rxValues[i]);
+      maxValue = math.max(maxValue, txValues[i]);
+    }
+    final scale = maxValue <= 0 ? 1.0 : maxValue;
+    final span = baseFrac - topFrac;
+    final slot = size.width / n;
+    // Pair of Down/Up bars with a small gap, centered in each bucket.
+    final pairGap = math.max(1.0, slot * 0.06);
+    final barWidth = math.max(1.5, (slot * 0.72 - pairGap) / 2);
+    final pairWidth = barWidth * 2 + pairGap;
+    final baseY = size.height * baseFrac;
+    final markIndex = scrubIndex ?? highlightIndex;
+
+    for (var i = 0; i < n; i++) {
+      final rx = rxValues[i].clamp(0.0, double.infinity);
+      final tx = txValues[i].clamp(0.0, double.infinity);
+      final centerX = (i + 0.5) * slot;
+      final pairLeft = centerX - pairWidth / 2;
+      final rxH = size.height * span * (rx / scale);
+      final txH = size.height * span * (tx / scale);
+      final selected = i == markIndex;
+      final scrubbed = i == scrubIndex;
+
+      final rxRect = Rect.fromLTWH(
+        pairLeft,
+        baseY - rxH,
+        barWidth,
+        math.max(rxH, 0),
+      );
+      final txRect = Rect.fromLTWH(
+        pairLeft + barWidth + pairGap,
+        baseY - txH,
+        barWidth,
+        math.max(txH, 0),
+      );
+
+      void drawBar(Rect rect, Color color, double alpha) {
+        if (rect.height < 0.5) {
+          canvas.drawLine(
+            Offset(rect.center.dx, baseY),
+            Offset(rect.center.dx, baseY - 2),
+            Paint()
+              ..color = color.withValues(alpha: 0.45)
+              ..strokeWidth = 1.25,
+          );
+          return;
+        }
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, const Radius.circular(2)),
+          Paint()
+            ..color = color.withValues(alpha: alpha)
+            ..isAntiAlias = true,
+        );
+      }
+
+      drawBar(
+        rxRect,
+        CyberShieldColors.secondaryContainer,
+        selected ? 0.95 : 0.78,
+      );
+      drawBar(
+        txRect,
+        CyberShieldColors.primary,
+        selected ? 0.95 : 0.72,
+      );
+
+      if (scrubbed) {
+        final outline = Paint()
+          ..color = CyberShieldColors.onSurface
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..isAntiAlias = true;
+        if (rxRect.height >= 0.5) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(rxRect, const Radius.circular(2)),
+            outline,
+          );
+        }
+        if (txRect.height >= 0.5) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(txRect, const Radius.circular(2)),
+            outline,
+          );
+        }
+      }
+    }
+  }
+
+  void _dashLine(Canvas canvas, Offset a, Offset b, Paint paint) {
+    const dash = 4.0;
+    const gap = 3.0;
+    final total = (b - a).distance;
+    if (total <= 0) {
+      return;
+    }
+    final dir = (b - a) / total;
+    var drawn = 0.0;
+    while (drawn < total) {
+      final start = a + dir * drawn;
+      final end = a + dir * math.min(drawn + dash, total);
+      canvas.drawLine(start, end, paint);
+      drawn += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PulseBarChartPainter oldDelegate) =>
+      oldDelegate.highlightIndex != highlightIndex ||
+      oldDelegate.scrubIndex != scrubIndex ||
+      !_PulseChartPainter._listEquals(oldDelegate.rxValues, rxValues) ||
+      !_PulseChartPainter._listEquals(oldDelegate.txValues, txValues);
 }
 
 class _PulseChartPainter extends CustomPainter {
@@ -816,11 +1210,13 @@ class _PulseChartPainter extends CustomPainter {
     required this.rxValues,
     required this.txValues,
     required this.highlightIndex,
+    this.scrubIndex,
   });
 
   final List<double> rxValues;
   final List<double> txValues;
   final int highlightIndex;
+  final int? scrubIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -884,25 +1280,51 @@ class _PulseChartPainter extends CustomPainter {
     _fillCurve(canvas, size, downPoints, CyberShieldColors.secondaryContainer, 0.12);
     _strokeCurve(canvas, downPoints, CyberShieldColors.secondaryContainer, 2.0);
 
-    if (highlightIndex >= 0 && highlightIndex < downPoints.length) {
-      final peak = downPoints[highlightIndex];
-      canvas.drawCircle(
-        peak,
-        3.5,
-        Paint()
-          ..color = CyberShieldColors.secondaryContainer
-          ..isAntiAlias = true,
-      );
-      canvas.drawCircle(
-        peak,
-        3.5,
-        Paint()
-          ..color = CyberShieldColors.surfaceContainerLowest
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..isAntiAlias = true,
-      );
+    final markIndex = scrubIndex ?? highlightIndex;
+    if (markIndex >= 0 && markIndex < downPoints.length) {
+      if (scrubIndex != null) {
+        final x = downPoints[markIndex].dx;
+        canvas.drawLine(
+          Offset(x, size.height * topFrac),
+          Offset(x, size.height * baseFrac),
+          Paint()
+            ..color = CyberShieldColors.onSurfaceVariant.withValues(alpha: 0.55)
+            ..strokeWidth = 1.25
+            ..isAntiAlias = true,
+        );
+        _drawMark(canvas, upPoints[markIndex], CyberShieldColors.primary);
+        _drawMark(
+          canvas,
+          downPoints[markIndex],
+          CyberShieldColors.secondaryContainer,
+        );
+      } else {
+        _drawMark(
+          canvas,
+          downPoints[markIndex],
+          CyberShieldColors.secondaryContainer,
+        );
+      }
     }
+  }
+
+  void _drawMark(Canvas canvas, Offset point, Color color) {
+    canvas.drawCircle(
+      point,
+      3.5,
+      Paint()
+        ..color = color
+        ..isAntiAlias = true,
+    );
+    canvas.drawCircle(
+      point,
+      3.5,
+      Paint()
+        ..color = CyberShieldColors.surfaceContainerLowest
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..isAntiAlias = true,
+    );
   }
 
   List<Offset> _seriesPoints(
@@ -993,6 +1415,7 @@ class _PulseChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _PulseChartPainter oldDelegate) =>
       oldDelegate.highlightIndex != highlightIndex ||
+      oldDelegate.scrubIndex != scrubIndex ||
       !_listEquals(oldDelegate.rxValues, rxValues) ||
       !_listEquals(oldDelegate.txValues, txValues);
 

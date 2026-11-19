@@ -43,3 +43,45 @@ func TestFillBucketsDailyZeros(t *testing.T) {
 		t.Fatal("missing populated day")
 	}
 }
+
+func TestParseRangeAllMonthly(t *testing.T) {
+	now := time.Date(2026, 11, 19, 11, 0, 0, 0, time.UTC)
+	ar := ParseRange("all", now)
+	if ar.Key != "all" || !ar.Monthly || ar.Hourly {
+		t.Fatalf("unexpected range: %+v", ar)
+	}
+	if got, want := ar.Since, time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("since=%v want=%v", got, want)
+	}
+	if got, want := ar.Until, time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("until=%v want=%v", got, want)
+	}
+}
+
+func TestFillBucketsMonthly(t *testing.T) {
+	ar := ParseRange("all", time.Date(2026, 11, 19, 11, 0, 0, 0, time.UTC))
+	points := fillBuckets(ar, map[string]Point{
+		"2026-03-01": {Date: "2026-03-01", Label: "Mar", RxBytes: 1000, TxBytes: 200},
+	})
+	if len(points) != 12 {
+		t.Fatalf("len=%d want 12", len(points))
+	}
+	if points[0].Date != "2025-12-01" || points[0].Label != "Dec" {
+		t.Fatalf("first=%+v", points[0])
+	}
+	if points[len(points)-1].Date != "2026-11-01" || points[len(points)-1].Label != "Nov" {
+		t.Fatalf("last=%+v", points[len(points)-1])
+	}
+	var found bool
+	for _, p := range points {
+		if p.Date == "2026-03-01" {
+			found = true
+			if p.RxBytes != 1000 || p.TxBytes != 200 {
+				t.Fatalf("march=%+v", p)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing march bucket")
+	}
+}

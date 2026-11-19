@@ -44,4 +44,47 @@ void main() {
     );
     expect(hours.points, hasLength(24));
   });
+
+  test('scaffold all builds 12 monthly buckets', () {
+    final months = UsageSeries.scaffold(
+      range: 'all',
+      now: DateTime.utc(2026, 11, 19, 11),
+    );
+    expect(months.points, hasLength(12));
+    expect(months.points.first.date, '2025-12-01');
+    expect(months.points.first.label, 'Dec');
+    expect(months.points.last.date, '2026-11-01');
+    expect(months.points.last.label, 'Nov');
+  });
+
+  test('ensureChartGranularity rolls daily all points into months', () {
+    final daily = UsageSeries.scaffold(
+      range: 'all',
+      now: DateTime.utc(2026, 11, 19, 11),
+    );
+    // Simulate legacy daily payload by expanding scaffold months is already monthly;
+    // build a fake dense daily series instead.
+    final dense = UsageSeries(
+      range: 'all',
+      totalRxBytes: 300,
+      totalTxBytes: 30,
+      points: [
+        for (var i = 0; i < 40; i++)
+          UsagePoint(
+            date: DateTime.utc(2026, 10, 1).add(Duration(days: i)).toIso8601String().substring(0, 10),
+            label: 'd',
+            rxBytes: 10,
+            txBytes: 1,
+          ),
+      ],
+    );
+    final rolled = dense.ensureChartGranularity();
+    expect(rolled.points.length, lessThanOrEqualTo(3));
+    expect(rolled.points.length, greaterThanOrEqualTo(2));
+    expect(
+      rolled.points.fold<int>(0, (sum, p) => sum + p.rxBytes),
+      400,
+    );
+    expect(daily.ensureChartGranularity().points, hasLength(12));
+  });
 }

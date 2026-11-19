@@ -51,6 +51,18 @@ class VpnStatsChartAxis {
         }
         return out;
       case VpnStatsChartPeriod.months12:
+        // Monthly series: one label per bucket. Daily legacy: month boundaries.
+        if (points.length <= 14) {
+          return [
+            for (var i = 0; i < points.length; i++)
+              VpnStatsChartTick(
+                index: i,
+                label: points[i].label.isNotEmpty
+                    ? points[i].label
+                    : monthTickLabel(points[i]),
+              ),
+          ];
+        }
         final out = <VpnStatsChartTick>[];
         var lastMonth = -1;
         for (var i = 0; i < points.length; i++) {
@@ -65,6 +77,14 @@ class VpnStatsChartAxis {
         }
         return out;
     }
+  }
+
+  static String monthTickLabel(UsagePoint point) {
+    final month = monthOf(point);
+    if (month == null) {
+      return point.label;
+    }
+    return monthLabel(month);
   }
 
   static double tickLeft({
@@ -155,5 +175,64 @@ class VpnStatsChartAxis {
       return '$month';
     }
     return months[month - 1];
+  }
+
+  /// Human-readable bucket title for scrub tooltips.
+  static String detailTitle({
+    required UsagePoint point,
+    required VpnStatsChartPeriod period,
+  }) {
+    switch (period) {
+      case VpnStatsChartPeriod.hours24:
+        return hourLabel(point);
+      case VpnStatsChartPeriod.days7:
+        final weekday =
+            point.label.isNotEmpty ? point.label : weekdayOf(point);
+        final day = dayMonthLabel(point);
+        return day == point.label ? weekday : '$weekday · $day';
+      case VpnStatsChartPeriod.days30:
+        return dayMonthLabel(point);
+      case VpnStatsChartPeriod.months12:
+        return monthDetailTitle(point);
+    }
+  }
+
+  static String monthDetailTitle(UsagePoint point) {
+    final match = RegExp(r'(\d{4})-(\d{2})').firstMatch(point.date);
+    if (match != null) {
+      final year = match.group(1)!;
+      final month = int.parse(match.group(2)!);
+      return '${monthLabel(month)} $year';
+    }
+    if (point.label.isNotEmpty) {
+      return point.label;
+    }
+    return point.date;
+  }
+
+  /// Map a touch X (in chart width) to the nearest series index (line chart).
+  static int indexAtX({
+    required double x,
+    required double width,
+    required int count,
+  }) {
+    if (count <= 1 || width <= 0) {
+      return 0;
+    }
+    final t = (x / width).clamp(0.0, 1.0);
+    return (t * (count - 1)).round().clamp(0, count - 1);
+  }
+
+  /// Map a touch X to a bar slot (equal-width columns).
+  static int indexAtBarX({
+    required double x,
+    required double width,
+    required int count,
+  }) {
+    if (count <= 0 || width <= 0) {
+      return 0;
+    }
+    final t = (x / width).clamp(0.0, 0.999999);
+    return (t * count).floor().clamp(0, count - 1);
   }
 }

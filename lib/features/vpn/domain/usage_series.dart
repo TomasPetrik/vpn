@@ -115,11 +115,69 @@ class UsageSeries {
       case '30d':
         return _dailyScaffold(range: '30d', days: 30, clock: clock);
       case 'all':
-        return _dailyScaffold(range: 'all', days: 365, clock: clock);
+        return _monthlyScaffold(clock: clock);
       case '7d':
       default:
         return _dailyScaffold(range: '7d', days: 7, clock: clock);
     }
+  }
+
+  /// If an older API still returns daily `all` points, roll them into months.
+  UsageSeries ensureChartGranularity() {
+    if (range != 'all' || points.length <= 14) {
+      return this;
+    }
+    return rollupDailyToMonthly();
+  }
+
+  UsageSeries rollupDailyToMonthly() {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final byMonth = <String, UsagePoint>{};
+    final order = <String>[];
+    for (final point in points) {
+      final match = RegExp(r'^(\d{4})-(\d{2})').firstMatch(point.date);
+      if (match == null) {
+        continue;
+      }
+      final key = '${match.group(1)}-${match.group(2)}-01';
+      final existing = byMonth[key];
+      if (existing == null) {
+        final month = int.parse(match.group(2)!);
+        byMonth[key] = UsagePoint(
+          date: key,
+          label: months[(month - 1).clamp(0, 11)],
+          rxBytes: point.rxBytes,
+          txBytes: point.txBytes,
+        );
+        order.add(key);
+      } else {
+        byMonth[key] = UsagePoint(
+          date: key,
+          label: existing.label,
+          rxBytes: existing.rxBytes + point.rxBytes,
+          txBytes: existing.txBytes + point.txBytes,
+        );
+      }
+    }
+    return UsageSeries(
+      range: range,
+      points: [for (final key in order) byMonth[key]!],
+      totalRxBytes: totalRxBytes,
+      totalTxBytes: totalTxBytes,
+    );
   }
 
   static UsageSeries _dailyScaffold({
@@ -147,6 +205,44 @@ class UsageSeries {
     }
     return UsageSeries(
       range: range,
+      points: points,
+      totalRxBytes: 0,
+      totalTxBytes: 0,
+    );
+  }
+
+  static UsageSeries _monthlyScaffold({required DateTime clock}) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final until = DateTime.utc(clock.year, clock.month + 1, 1);
+    final since = DateTime.utc(until.year, until.month - 12, 1);
+    final points = <UsagePoint>[];
+    for (var t = since; t.isBefore(until); t = DateTime.utc(t.year, t.month + 1, 1)) {
+      final y = t.year.toString().padLeft(4, '0');
+      final m = t.month.toString().padLeft(2, '0');
+      points.add(
+        UsagePoint(
+          date: '$y-$m-01',
+          label: months[t.month - 1],
+          rxBytes: 0,
+          txBytes: 0,
+        ),
+      );
+    }
+    return UsageSeries(
+      range: 'all',
       points: points,
       totalRxBytes: 0,
       totalTxBytes: 0,

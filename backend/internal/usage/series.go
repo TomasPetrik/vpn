@@ -10,13 +10,14 @@ import (
 
 // Range describes a bounded analytics window.
 type Range struct {
-	Key    string
-	Since  time.Time
-	Until  time.Time
-	Hourly bool
+	Key     string
+	Since   time.Time
+	Until   time.Time
+	Hourly  bool
+	Monthly bool
 }
 
-// Point is one chart bucket (hour or day).
+// Point is one chart bucket (hour, day, or month).
 type Point struct {
 	Date            string `json:"date"`
 	Label           string `json:"label"`
@@ -54,11 +55,13 @@ func ParseRange(key string, now time.Time) Range {
 			Until: until,
 		}
 	case "all":
-		until := truncateDay(now).Add(24 * time.Hour)
+		// 12 calendar months including the current month, aggregated monthly.
+		until := truncateMonth(now).AddDate(0, 1, 0)
 		return Range{
-			Key:   "all",
-			Since: until.Add(-365 * 24 * time.Hour), // daily buckets; samples retained 365d
-			Until: until,
+			Key:     "all",
+			Since:   until.AddDate(0, -12, 0),
+			Until:   until,
+			Monthly: true,
 		}
 	default: // 7d
 		until := truncateDay(now).Add(24 * time.Hour)
@@ -95,8 +98,11 @@ func Load(ctx context.Context, db *sql.DB, deviceID, rangeKey string, now time.T
 	}
 
 	bucketExpr := "DATE_FORMAT(s.sampled_at, '%Y-%m-%d')"
-	if ar.Hourly {
+	switch {
+	case ar.Hourly:
 		bucketExpr = "DATE_FORMAT(s.sampled_at, '%Y-%m-%d %H:00:00')"
+	case ar.Monthly:
+		bucketExpr = "DATE_FORMAT(s.sampled_at, '%Y-%m-01')"
 	}
 	seriesQ := fmt.Sprintf(`
 		SELECT CAST(%s AS CHAR) AS bucket,
@@ -122,7 +128,7 @@ func Load(ctx context.Context, db *sql.DB, deviceID, rangeKey string, now time.T
 		}
 		byKey[key] = Point{
 			Date:           key,
-			Label:          labelFor(key, ar.Hourly),
+			Label:          labelFor(key, ar),
 			RxBytes:        rx,
 			TxBytes:        tx,
 			HandshakeDelta: hs,
@@ -159,6 +165,21 @@ func fillBuckets(ar Range, byKey map[string]Point) []Point {
 		return out
 	}
 
+	if ar.Monthly {
+		for t := truncateMonth(ar.Since); t.Before(ar.Until); t = t.AddDate(0, 1, 0) {
+			key := t.Format("2006-01-02")
+			if p, ok := byKey[key]; ok {
+				out = append(out, p)
+				continue
+			}
+			out = append(out, Point{
+				Date:  key,
+				Label: t.Format("Jan"),
+			})
+		}
+		return out
+	}
+
 	for t := truncateDay(ar.Since); t.Before(ar.Until); t = t.AddDate(0, 0, 1) {
 		key := t.Format("2006-01-02")
 		if p, ok := byKey[key]; ok {
@@ -178,11 +199,27 @@ func truncateDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func labelFor(key string, hourly bool) string {
+func truncateMonth(t time.Time) time.Time {
+	t = t.UTC()
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func labelFor(key string, ar Range) string {
 	key = strings.TrimSpace(key)
-	if hourly {
+	if ar.Hourly {
 		if len(key) >= 16 {
 			return key[11:16]
+		}
+		return key
+	}
+	if ar.Monthly {
+		if t, err := time.ParseInLocation("2006-01-02", key, time.UTC); err == nil {
+			return t.Format("Jan")
+		}
+		if len(key) >= 7 {
+			if t, err := time.ParseInLocation("2006-01", key[:7], time.UTC); err == nil {
+				return t.Format("Jan")
+			}
 		}
 		return key
 	}
