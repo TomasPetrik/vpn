@@ -31,6 +31,8 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
   };
   final Set<String> _usageFetched = {};
   final Set<String> _usageInFlight = {};
+  Timer? _liveUsageTimer;
+  bool _wasConnected = false;
 
   UsageSeries get _usage =>
       _usageCache[_apiRange] ?? UsageSeries.scaffold(range: _apiRange);
@@ -42,6 +44,40 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
     // Warm current + neighbors in the background (no spinner).
     unawaited(_ensureUsage(_apiRange));
     unawaited(_prefetchNeighbors(_apiRange));
+    final connected = context.read<VpnConnectCubit>().state.isConnected;
+    _wasConnected = connected;
+    if (connected) {
+      _startLiveUsageRefresh();
+    }
+  }
+
+  @override
+  void dispose() {
+    _liveUsageTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncLiveUsageRefresh(bool connected) {
+    if (connected == _wasConnected) {
+      return;
+    }
+    _wasConnected = connected;
+    if (connected) {
+      _startLiveUsageRefresh();
+      unawaited(_ensureUsage(_apiRange, force: true));
+    } else {
+      _liveUsageTimer?.cancel();
+      _liveUsageTimer = null;
+      unawaited(_ensureUsage(_apiRange, force: true));
+    }
+  }
+
+  void _startLiveUsageRefresh() {
+    _liveUsageTimer?.cancel();
+    // Backend SyncStats samples ~15s; refresh a bit faster so cards move.
+    _liveUsageTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_ensureUsage(_apiRange, force: true));
+    });
   }
 
   String get _apiRange => _rangeFor(_period);
@@ -101,22 +137,35 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
     return Scaffold(
       backgroundColor: CyberShieldColors.background,
       body: SafeArea(
-        child: BlocBuilder<VpnConnectCubit, VpnConnectState>(
+        child: BlocConsumer<VpnConnectCubit, VpnConnectState>(
+          listenWhen: (prev, next) => prev.isConnected != next.isConnected,
+          listener: (context, state) {
+            _syncLiveUsageRefresh(state.isConnected);
+          },
           builder: (context, state) {
             final overall = state.overallTotals;
-            final totalBytes = overall.rxBytes + overall.txBytes;
+            // Period cards prefer backend peer_stats (server WireGuard truth).
+            // All-time while connected also lifts with local live counters so the
+            // UI moves before the next SyncStats sample lands.
+            final periodRx = _period == _StatsPeriod.all && state.isConnected
+                ? math.max(_usage.totalRxBytes, overall.rxBytes)
+                : _usage.totalRxBytes;
+            final periodTx = _period == _StatsPeriod.all && state.isConnected
+                ? math.max(_usage.totalTxBytes, overall.txBytes)
+                : _usage.totalTxBytes;
+            final totalBytes = periodRx + periodTx;
             final rxShare =
-                totalBytes == 0 ? 0.0 : overall.rxBytes / totalBytes;
+                totalBytes == 0 ? 0.0 : periodRx / totalBytes;
             final txShare =
-                totalBytes == 0 ? 0.0 : overall.txBytes / totalBytes;
+                totalBytes == 0 ? 0.0 : periodTx / totalBytes;
             final days = switch (_period) {
               _StatsPeriod.today => 1,
               _StatsPeriod.days7 => 7,
               _StatsPeriod.days30 => 30,
               _StatsPeriod.all => math.max(1, overall.activeSeconds ~/ 86400),
             };
-            final avgRxPerDay = overall.rxBytes / days;
-            final avgTxPerDay = overall.txBytes / days;
+            final avgRxPerDay = periodRx / days;
+            final avgTxPerDay = periodTx / days;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -193,8 +242,8 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                                   const SizedBox(height: 4),
                                   Text(
                                     state.isConnected
-                                        ? 'Live session included'
-                                        : 'Committed usage',
+                                        ? 'Server usage · live tunnel'
+                                        : 'Server-reported usage',
                                     style: CyberShieldTheme.bodySm(),
                                   ),
                                 ],
@@ -234,7 +283,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                               label: 'Download',
                               icon: Icons.arrow_downward,
                               accent: CyberShieldColors.secondaryContainer,
-                              bytes: overall.rxBytes,
+                              bytes: periodRx,
                               share: rxShare,
                               avgPerDay: avgRxPerDay,
                             ),
@@ -245,7 +294,7 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                               label: 'Upload',
                               icon: Icons.arrow_upward,
                               accent: CyberShieldColors.primary,
-                              bytes: overall.txBytes,
+                              bytes: periodTx,
                               share: txShare,
                               avgPerDay: avgTxPerDay,
                             ),

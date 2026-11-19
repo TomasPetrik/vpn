@@ -60,6 +60,18 @@ class SharedPrefsVpnUsageStatsStore implements VpnUsageStatsStore {
   }
 
   @override
+  Future<VpnUsageTotals?> readInflight() async {
+    if (_prefs.getBool(_inflightFlagKey) != true) {
+      return null;
+    }
+    return VpnUsageTotals(
+      rxBytes: _prefs.getInt(_inflightRxKey) ?? 0,
+      txBytes: _prefs.getInt(_inflightTxKey) ?? 0,
+      activeSeconds: _prefs.getInt(_inflightSecondsKey) ?? 0,
+    );
+  }
+
+  @override
   Future<void> clearInflight() async {
     await _prefs.remove(_inflightFlagKey);
     await _prefs.remove(_inflightRxKey);
@@ -69,13 +81,14 @@ class SharedPrefsVpnUsageStatsStore implements VpnUsageStatsStore {
 
   @override
   Future<VpnUsageTotals> recoverInflightIfNeeded() async {
-    if (_prefs.getBool(_inflightFlagKey) != true) {
+    final inflight = await readInflight();
+    if (inflight == null) {
       return readCommitted();
     }
     await commitSession(
-      rxBytes: _prefs.getInt(_inflightRxKey) ?? 0,
-      txBytes: _prefs.getInt(_inflightTxKey) ?? 0,
-      activeSeconds: _prefs.getInt(_inflightSecondsKey) ?? 0,
+      rxBytes: inflight.rxBytes,
+      txBytes: inflight.txBytes,
+      activeSeconds: inflight.activeSeconds,
     );
     return readCommitted();
   }

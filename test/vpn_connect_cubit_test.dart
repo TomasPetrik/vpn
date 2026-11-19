@@ -62,6 +62,9 @@ class _MemoryUsageStore implements VpnUsageStatsStore {
   }
 
   @override
+  Future<VpnUsageTotals?> readInflight() async => inflight;
+
+  @override
   Future<void> clearInflight() async {
     inflight = null;
   }
@@ -89,6 +92,7 @@ void main() {
   late _MockVpnEngine engine;
   late _MemoryUsageStore usage;
   late _FakeLatencyProbe latencyProbe;
+  var tunnelUp = false;
 
   final peer = VpnPeerConfig(
     peerId: 'peer-1',
@@ -122,6 +126,7 @@ void main() {
     engine = _MockVpnEngine();
     usage = _MemoryUsageStore();
     latencyProbe = _FakeLatencyProbe(42);
+    tunnelUp = false;
     when(() => repo.me()).thenAnswer(
       (_) async => const DeviceSession(userId: 'u1', deviceId: 'd1'),
     );
@@ -130,6 +135,7 @@ void main() {
     );
     when(() => repo.upsertPeer(publicKey: any(named: 'publicKey')))
         .thenAnswer((_) async => peer);
+    when(() => repo.getPeer()).thenAnswer((_) async => peer);
     when(() => engine.getPublicKey())
         .thenAnswer((_) async => 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
     when(() => engine.prepare()).thenAnswer(
@@ -139,20 +145,28 @@ void main() {
         message: 'ok',
       ),
     );
-    when(() => engine.startTunnel(any())).thenAnswer(
-      (_) async => const VpnTunnelResult(
+    when(() => engine.startTunnel(any())).thenAnswer((_) async {
+      tunnelUp = true;
+      return const VpnTunnelResult(
         ok: true,
         status: 'connecting',
         message: 'startVPNTunnel requested (WireGuardKit)',
-      ),
-    );
-    when(() => engine.getStatus()).thenAnswer(
-      (_) async => const VpnStatusSnapshot(
+      );
+    });
+    when(() => engine.getStatus()).thenAnswer((_) async {
+      if (!tunnelUp) {
+        return const VpnStatusSnapshot(
+          status: 'disconnected',
+          extensionStatus: '',
+          extensionLog: [],
+        );
+      }
+      return const VpnStatusSnapshot(
         status: 'connected',
         extensionStatus: 'wireguard_started',
         extensionLog: ['WireGuard started (wstunnel on 127.0.0.1:51820)'],
-      ),
-    );
+      );
+    });
     when(() => engine.statusStream()).thenAnswer((_) => const Stream.empty());
   });
 
@@ -193,16 +207,23 @@ void main() {
   blocTest<VpnConnectCubit, VpnConnectState>(
     'connect stores WireGuard rx/tx and handshake from status',
     build: () {
-      when(() => engine.getStatus()).thenAnswer(
-        (_) async => VpnStatusSnapshot(
+      when(() => engine.getStatus()).thenAnswer((_) async {
+        if (!tunnelUp) {
+          return const VpnStatusSnapshot(
+            status: 'disconnected',
+            extensionStatus: '',
+            extensionLog: [],
+          );
+        }
+        return VpnStatusSnapshot(
           status: 'connected',
           extensionStatus: 'wireguard_started',
           extensionLog: const [],
           rxBytes: 1500,
           txBytes: 800,
           lastHandshakeAt: DateTime.utc(2026, 11, 18, 3, 0, 0),
-        ),
-      );
+        );
+      });
       return buildCubit();
     },
     act: (cubit) => cubit.connect(),
@@ -220,16 +241,24 @@ void main() {
 
   test('traffic poll derives live download/upload Mbps from counter deltas',
       () async {
-    when(() => engine.getStatus()).thenAnswer(
-      (_) async => const VpnStatusSnapshot(
+    when(() => engine.getStatus()).thenAnswer((_) async {
+      if (!tunnelUp) {
+        return const VpnStatusSnapshot(
+          status: 'disconnected',
+          extensionStatus: '',
+          extensionLog: [],
+        );
+      }
+      return const VpnStatusSnapshot(
         status: 'connected',
         extensionStatus: 'wireguard_started',
         extensionLog: [],
         rxBytes: 1_000_000,
         txBytes: 500_000,
-      ),
-    );
+      );
+    });
     final cubit = buildCubit();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
     await cubit.connect();
     expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
 
@@ -253,6 +282,49 @@ void main() {
     await cubit.close();
   });
 
+  test('cold start restores connected UI and keeps inflight when tunnel is up',
+      () async {
+    tunnelUp = true;
+    usage.committed = const VpnUsageTotals(
+      rxBytes: 10_000,
+      txBytes: 4_000,
+      activeSeconds: 120,
+    );
+    usage.inflight = const VpnUsageTotals(
+      rxBytes: 3_000,
+      txBytes: 1_000,
+      activeSeconds: 45,
+    );
+    when(() => engine.getStatus()).thenAnswer(
+      (_) async => const VpnStatusSnapshot(
+        status: 'connected',
+        extensionStatus: 'wireguard_started',
+        extensionLog: [],
+        rxBytes: 5_000,
+        txBytes: 2_000,
+      ),
+    );
+
+    final cubit = buildCubit();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(cubit.state.phase, VpnConnectPhase.skeletonConnected);
+    expect(cubit.state.isConnected, isTrue);
+    expect(cubit.state.peer?.peerId, 'peer-1');
+    expect(cubit.state.rxBytes, 5_000);
+    expect(cubit.state.txBytes, 2_000);
+    expect(cubit.state.sessionSeconds, 45);
+    expect(cubit.state.committedTotals.rxBytes, 10_000);
+    // Inflight must stay open so WireGuard absolute counters are not double-committed.
+    expect(usage.inflight, isNotNull);
+    expect(usage.committed.rxBytes, 10_000);
+    expect(cubit.state.overallTotals.rxBytes, 15_000);
+
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(cubit.state.rxBytes, 5_000);
+    await cubit.close();
+  });
+
   blocTest<VpnConnectCubit, VpnConnectState>(
     'connected session stores tunnel latency from probe',
     build: buildCubit,
@@ -268,25 +340,34 @@ void main() {
   blocTest<VpnConnectCubit, VpnConnectState>(
     'disconnect commits session into overall totals',
     build: () {
-      when(() => engine.getStatus()).thenAnswer(
-        (_) async => const VpnStatusSnapshot(
+      when(() => engine.getStatus()).thenAnswer((_) async {
+        if (!tunnelUp) {
+          return const VpnStatusSnapshot(
+            status: 'disconnected',
+            extensionStatus: '',
+            extensionLog: [],
+          );
+        }
+        return const VpnStatusSnapshot(
           status: 'connected',
           extensionStatus: 'wireguard_started',
           extensionLog: [],
           rxBytes: 2000,
           txBytes: 1000,
-        ),
-      );
-      when(() => engine.stopTunnel()).thenAnswer(
-        (_) async => const VpnTunnelResult(
+        );
+      });
+      when(() => engine.stopTunnel()).thenAnswer((_) async {
+        tunnelUp = false;
+        return const VpnTunnelResult(
           ok: true,
           status: 'disconnected',
           message: 'stopped',
-        ),
-      );
+        );
+      });
       return buildCubit();
     },
     act: (cubit) async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
       await cubit.connect();
       await cubit.disconnect();
     },

@@ -179,7 +179,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         _latencyInterval = latencyInterval,
         super(VpnConnectState.initial()) {
     _statusSub = _vpnEngine.statusStream().listen(_onStatus);
-    unawaited(_bootstrapUsage());
+    unawaited(_bootstrapFromNative());
   }
 
   final DeviceRepository _deviceRepository;
@@ -193,6 +193,8 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   String? _lastStatusKey;
   bool _committingSession = false;
   bool _latencyInFlight = false;
+  bool _bootstrapping = true;
+  bool _adoptingTunnel = false;
   int? _prevRxBytes;
   int? _prevTxBytes;
   DateTime? _prevTrafficSampleAt;
@@ -212,7 +214,21 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     emit(state.copyWith(committedTotals: totals));
   }
 
-  Future<void> _bootstrapUsage() async {
+  /// Cold-start: reattach to a tunnel that survived app kill, or fold orphaned
+  /// inflight usage into committed totals when the tunnel is actually down.
+  Future<void> _bootstrapFromNative() async {
+    try {
+      final snap = await _vpnEngine.getStatus();
+      if (!isClosed && _isTunnelUp(snap)) {
+        await _adoptConnectedTunnel(snap, reason: 'restored after app relaunch');
+        return;
+      }
+    } catch (_) {
+      // Native channel may be unavailable on unsupported platforms.
+    } finally {
+      _bootstrapping = false;
+    }
+
     final totals = await _usageStatsStore.recoverInflightIfNeeded();
     if (isClosed) {
       return;
@@ -224,6 +240,88 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
       return;
     }
     emit(state.copyWith(committedTotals: totals));
+  }
+
+  static bool _isTunnelUp(VpnStatusSnapshot snap) =>
+      snap.status == 'connected' ||
+      snap.extensionStatus == 'wireguard_started' ||
+      snap.extensionStatus == 'skeleton_connected';
+
+  /// Adopt an already-running native tunnel into UI + analytics state.
+  Future<void> _adoptConnectedTunnel(
+    VpnStatusSnapshot snap, {
+    required String reason,
+  }) async {
+    if (isClosed || _adoptingTunnel) {
+      return;
+    }
+    if (state.phase == VpnConnectPhase.skeletonConnected) {
+      await _applyTraffic(snap);
+      return;
+    }
+    if (state.isBusy && state.phase != VpnConnectPhase.startingTunnel) {
+      return;
+    }
+
+    _adoptingTunnel = true;
+    try {
+      final committed = await _usageStatsStore.readCommitted();
+      final inflight = await _usageStatsStore.readInflight();
+      final priorSeconds = inflight?.activeSeconds ?? 0;
+      final started =
+          DateTime.now().subtract(Duration(seconds: priorSeconds));
+
+      VpnPeerConfig? peer = state.peer;
+      if (peer == null) {
+        try {
+          peer = await _deviceRepository.getPeer();
+        } catch (_) {
+          // Peer metadata is optional for restore; latency falls back to 1.1.1.1.
+        }
+      }
+
+      if (isClosed) {
+        return;
+      }
+
+      final rx = snap.rxBytes ?? inflight?.rxBytes;
+      final tx = snap.txBytes ?? inflight?.txBytes;
+      final lines = List<VpnConnectLogLine>.from(state.log)
+        ..add(
+          VpnConnectLogLine(
+            at: DateTime.now(),
+            message: 'VPN $reason (status=${snap.status})',
+          ),
+        );
+
+      emit(
+        state.copyWith(
+          phase: VpnConnectPhase.skeletonConnected,
+          stepLabel: 'Connected',
+          log: List.unmodifiable(lines),
+          peer: peer,
+          committedTotals: committed,
+          rxBytes: rx,
+          txBytes: tx,
+          lastHandshakeAt: snap.lastHandshakeAt,
+          sessionStartedAt: started,
+          sessionSeconds: priorSeconds,
+          clearError: true,
+        ),
+      );
+
+      // Keep the live session checkpoint — do not commit while tunnel is up.
+      await _usageStatsStore.writeInflight(
+        rxBytes: rx ?? 0,
+        txBytes: tx ?? 0,
+        activeSeconds: priorSeconds,
+      );
+      _lastStatusKey = '${snap.status}|${snap.extensionStatus}';
+      _startStatsPolling();
+    } finally {
+      _adoptingTunnel = false;
+      _bootstrapping = false;
+    }
   }
 
   void _markSessionStarted({DateTime? at}) {
@@ -321,6 +419,22 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
     try {
       final snap = await _vpnEngine.getStatus();
       if (isClosed || state.phase != VpnConnectPhase.skeletonConnected) {
+        return;
+      }
+      if (!_isTunnelUp(snap)) {
+        _stopStatsPolling();
+        await _commitCurrentSession();
+        if (isClosed) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            phase: VpnConnectPhase.idle,
+            stepLabel: 'Not connected',
+            clearTraffic: true,
+            clearSession: true,
+          ),
+        );
         return;
       }
       await _applyTraffic(snap);
@@ -459,6 +573,16 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
   }
 
   void _onStatus(VpnStatusSnapshot snap) {
+    // Cold-start EventChannel may report "connected" while cubit is still idle.
+    // Bootstrap also queries getStatus; skip duplicate adopt until it finishes.
+    if (!_bootstrapping &&
+        (state.phase == VpnConnectPhase.idle ||
+            state.phase == VpnConnectPhase.error) &&
+        _isTunnelUp(snap)) {
+      unawaited(_adoptConnectedTunnel(snap, reason: 'status event'));
+      return;
+    }
+
     if (state.phase != VpnConnectPhase.startingTunnel &&
         state.phase != VpnConnectPhase.skeletonConnected) {
       return;
@@ -479,9 +603,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
 
     log('VPN status → ${snap.status} (extension: ${snap.extensionStatus})');
 
-    if (snap.status == 'connected' ||
-        snap.extensionStatus == 'wireguard_started' ||
-        snap.extensionStatus == 'skeleton_connected') {
+    if (_isTunnelUp(snap)) {
       final started = state.sessionStartedAt ?? DateTime.now();
       emit(
         state.copyWith(
@@ -606,9 +728,7 @@ class VpnConnectCubit extends Cubit<VpnConnectState> {
         log(
           'poll status=${snap.status} ext=${snap.extensionStatus}',
         );
-        if (snap.status == 'connected' ||
-            snap.extensionStatus == 'wireguard_started' ||
-            snap.extensionStatus == 'skeleton_connected') {
+        if (_isTunnelUp(snap)) {
           for (final line in snap.extensionLog) {
             log('ext: $line');
           }

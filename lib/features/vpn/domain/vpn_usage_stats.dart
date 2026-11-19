@@ -51,6 +51,9 @@ abstract class VpnUsageStatsStore {
     required int activeSeconds,
   });
 
+  /// Latest checkpoint of an unfinished session, or null if none.
+  Future<VpnUsageTotals?> readInflight();
+
   Future<void> clearInflight();
 
   /// If a previous session was checkpointed and never committed, fold it in.
