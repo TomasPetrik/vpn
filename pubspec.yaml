@@ -1,7 +1,7 @@
 name: ru_eu_vpn
 description: "PetrikVPN — Flutter client for the Petrixon VPN service."
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.1+3
 
 environment:
   sdk: ^3.10.4
