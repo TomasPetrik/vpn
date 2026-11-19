@@ -15,21 +15,21 @@ Privacy contact: `info@petrixon.com`
 ## A. Must implement in the app (before submit)
 
 ### A1. In-app Privacy Policy + Terms links
-- [ ] Add easily reachable links (Settings / About / overflow menu is fine) to:
+- [x] Add easily reachable links (Settings / About / overflow menu is fine) to:
   - Privacy Policy → `https://petrixon.com/vpn/privacy/`
   - Terms of Use → `https://petrixon.com/vpn/terms/`
-- [ ] Apple requires the privacy policy link in the app, not only in App Store Connect.
-- [ ] Google requires a privacy policy link or text inside the app.
+- [x] Apple requires the privacy policy link in the app, not only in App Store Connect.
+- [x] Google requires a privacy policy link or text inside the app.
 
 ### A2. Pre-VPN data disclosure screen (Apple 5.4 + Google VpnService)
 Show **before the first Connect** (not buried in Settings), in plain language:
 
-- [ ] What data is collected (anonymous device registration, device/app metadata, WireGuard public key, technical peer stats).
-- [ ] That VPN traffic content / browsing history is **not** sold and **not** disclosed to third parties for advertising.
-- [ ] How data is used (provide VPN, security, force-upgrade, abuse prevention).
-- [ ] Link to the full Privacy Policy.
-- [ ] Affirmative consent ( fore.g. Continue / I understand) **before** first tunnel use.
-- [ ] Google: this VpnService disclosure must be **separate** from other permission dialogs and not only in the privacy policy.
+- [x] What data is collected (anonymous device registration, device/app metadata, WireGuard public key, technical peer stats).
+- [x] That VPN traffic content / browsing history is **not** sold and **not** disclosed to third parties for advertising.
+- [x] How data is used (provide VPN, security, force-upgrade, abuse prevention).
+- [x] Link to the full Privacy Policy.
+- [x] Affirmative consent (e.g. Continue / I understand) **before** first tunnel use.
+- [x] Google: this VpnService disclosure must be **separate** from other permission dialogs and not only in the privacy policy.
 
 ### A3. System VPN permission UX
 - [ ] iOS: use Network Extension / Packet Tunnel (already planned); show system VPN permission promptly and honestly.
@@ -37,9 +37,9 @@ Show **before the first Connect** (not buried in Settings), in plain language:
 - [ ] Purpose strings / copy must match reality (VPN connectivity only).
 
 ### A4. Data deletion path (even without accounts)
-- [ ] In-app: short “Request data deletion” text pointing to `info@petrixon.com`, or an in-app mail compose.
-- [ ] Document what the user should include (platform, device model, any shown device/installation id).
-- [ ] Operator process: locate device record and delete/anonymize user+device+peer within a defined SLA (e.g. 30 days).
+- [x] In-app: short “Request data deletion” text pointing to `info@petrixon.com`, or an in-app mail compose.
+- [x] Document what the user should include (platform, device model, any shown device/installation id).
+- [x] Operator process: locate device record and delete/anonymize user+device+peer (+ diagnostic reports) within a defined SLA (e.g. 30 days). See `docs/legal/deletion_runbook.md`.
 
 ### A5. Keep product scope matching “free / no account / no IAP”
 - [ ] Do not add login walls.
@@ -106,7 +106,7 @@ Show **before the first Connect** (not buried in Settings), in plain language:
 
 - [ ] Confirm production logging still matches the privacy policy (no traffic/DNS/content logs).
 - [ ] Keep admin access restricted; do not export device lists for marketing.
-- [ ] Have a written deletion runbook for `info@petrixon.com` requests.
+- [x] Have a written deletion runbook for `info@petrixon.com` requests (`docs/legal/deletion_runbook.md`).
 - [ ] Abuse process: how you block a device and when you retain minimal evidence.
 - [ ] Hosting / VPS terms: confirm VPN egress is allowed on the provider contract.
 - [ ] If user base grows beyond private/friends: revisit jurisdiction, logging, and abuse tooling.
@@ -122,9 +122,12 @@ Collected / processed:
 | Installation ID + hashed optional device id + device token hash | App functionality / fraud prevention | Anonymous device registration |
 | Manufacturer, model, OS, app version/build | App functionality | Force-upgrade + support |
 | WireGuard public key, tunnel IP, peer byte/handshake stats | App functionality | VPN provisioning/ops |
-| API source IP (proxy/rate limit) | Security | Not for ads |
+| API source IP (proxy/rate limit) + approximate country | Security | Stored on device record (`last_client_ip` / `last_client_country`) |
+| Voluntary diagnostic reports (connect log + metadata) | App functionality / support | Only when user taps Send diagnostic data |
 
 Not collected: name, email, payment info, precise location, contacts, photos, ads interactions, tracking across apps.
+
+**Policy sync:** publish `docs/legal/privacy_policy.md` (and hub glance patch) to petrixon.com before store submit. Live site is on Websupport, not this repo.
 
 ---
 

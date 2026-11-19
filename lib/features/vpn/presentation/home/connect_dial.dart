@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/cyber_shield_colors.dart';
 import '../../../../core/theme/cyber_shield_theme.dart';
 import '../vpn_connect_cubit.dart';
+import '../vpn_privacy_disclosure_sheet.dart';
 
 enum ConnectDialVisual { disconnected, connecting, connected }
 
@@ -64,6 +65,10 @@ class _ConnectDialState extends State<ConnectDial>
     if (connect.canDisconnect) {
       await cubit.disconnect();
     } else if (connect.canConnect) {
+      final allowed = await ensureVpnPrivacyDisclosureAccepted(context);
+      if (!allowed || !mounted) {
+        return;
+      }
       await cubit.connect();
     }
   }

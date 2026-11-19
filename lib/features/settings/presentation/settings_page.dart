@@ -75,6 +75,13 @@ class SettingsPage extends StatelessWidget {
                         subtitle: 'Upload connect log to your device record',
                         onTap: () => _sendDiagnosticData(context),
                       ),
+                      const _SettingsDivider(),
+                      _SettingsTile(
+                        icon: Icons.delete_outline,
+                        title: 'Request data deletion',
+                        subtitle: 'Email info@petrixon.com',
+                        onTap: () => _requestDataDeletion(context),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -110,6 +117,45 @@ class SettingsPage extends StatelessWidget {
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open link')),
+      );
+    }
+  }
+
+  static Future<void> _requestDataDeletion(BuildContext context) async {
+    final packageInfo = getIt<PackageInfo>();
+    final installationId =
+        await getIt<SecureStore>().readInstallationId() ?? 'unknown';
+    String platform = Platform.isIOS
+        ? 'ios'
+        : Platform.isAndroid
+            ? 'android'
+            : Platform.operatingSystem;
+    try {
+      final info = await getIt<DeviceInfoSource>().collect();
+      if (info.platform.isNotEmpty) platform = info.platform;
+    } catch (_) {}
+
+    final body = [
+      'Please delete my PetrikVPN device registration data.',
+      '',
+      'Platform: $platform',
+      'App version: ${packageInfo.version} (${packageInfo.buildNumber})',
+      'Installation ID: $installationId',
+      '',
+      'I confirm this request concerns PetrikVPN data deletion.',
+    ].join('\n');
+
+    final mailUri = Uri.parse(
+      'mailto:info@petrixon.com'
+      '?subject=${Uri.encodeComponent('PetrikVPN data deletion request')}'
+      '&body=${Uri.encodeComponent(body)}',
+    );
+    final opened = await launchUrl(mailUri);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email info@petrixon.com to request deletion'),
+        ),
       );
     }
   }

@@ -44,11 +44,11 @@ Local entitlements already request Packet Tunnel, the App Group, and keychain ac
 
 Apple requires a plain-language screen, shown before the first connect, that says what is collected and how it is used. The privacy policy must also say the VPN data is not sold or disclosed to third parties for any purpose.
 
-- [ ] Disclosure screen before the first Connect: device registration data, device/app metadata, WireGuard public key, technical peer stats; used to provide the VPN, security, force-upgrade, and abuse prevention; browsing content is not sold and not given to third parties for advertising; link to the privacy policy; an explicit Continue before the tunnel starts.
-- [ ] Settings (or equivalent) links, easy to find:
+- [x] Disclosure screen before the first Connect: device registration data, device/app metadata, WireGuard public key, technical peer stats; used to provide the VPN, security, force-upgrade, and abuse prevention; browsing content is not sold and not given to third parties for advertising; link to the privacy policy; an explicit Continue before the tunnel starts.
+- [x] Settings (or equivalent) links, easy to find:
   - Privacy Policy → `https://petrixon.com/vpn/privacy/`
   - Terms of Use → `https://petrixon.com/vpn/terms/`
-- [ ] “Request data deletion” pointing at `info@petrixon.com`, telling the user what to include (platform, device model, any installation id the app shows). Do not invent an account just to satisfy account-deletion rules.
+- [x] “Request data deletion” pointing at `info@petrixon.com`, telling the user what to include (platform, device model, any installation id the app shows). Do not invent an account just to satisfy account-deletion rules.
 - [ ] Purpose of the VPN permission matches the product: VPN connectivity only.
 - [ ] Release build has `DEV_MODE` off (that is already the default). Confirm the debug API log is not reachable in the uploaded build.
 

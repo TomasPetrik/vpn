@@ -146,54 +146,14 @@ class DeviceRepositoryImpl implements DeviceRepository {
       final session = await me();
       final ip = session.clientIp?.trim();
       if (ip != null && ip.isNotEmpty) {
-        final country = session.clientCountry;
-        if (country != null && country.isNotEmpty) {
-          return PublicNetworkInfo(ip: ip, countryCode: country);
-        }
-        final resolved = await _countryForIp(ip);
-        return PublicNetworkInfo(ip: ip, countryCode: resolved);
-      }
-    } catch (_) {
-      // Fall through to public echo services.
-    }
-
-    try {
-      final response = await Dio().get<Map<String, dynamic>>(
-        'https://api.country.is/',
-      );
-      final data = response.data;
-      final ip = data?['ip']?.toString().trim();
-      final country = data?['country']?.toString().trim().toUpperCase();
-      if (ip != null && ip.isNotEmpty) {
         return PublicNetworkInfo(
           ip: ip,
-          countryCode: (country != null && country.length == 2) ? country : null,
+          countryCode: session.clientCountry,
         );
       }
-    } catch (_) {}
-
-    try {
-      final response = await Dio().get<String>('https://api.ipify.org');
-      final ip = response.data?.trim();
-      if (ip != null && ip.isNotEmpty) {
-        final country = await _countryForIp(ip);
-        return PublicNetworkInfo(ip: ip, countryCode: country);
-      }
-    } catch (_) {}
-
+    } catch (_) {
+      // No third-party IP/geo fallbacks — only our API.
+    }
     return const PublicNetworkInfo();
-  }
-
-  Future<String?> _countryForIp(String ip) async {
-    try {
-      final response = await Dio().get<Map<String, dynamic>>(
-        'https://api.country.is/$ip',
-      );
-      final country = response.data?['country']?.toString().trim().toUpperCase();
-      if (country != null && country.length == 2) {
-        return country;
-      }
-    } catch (_) {}
-    return null;
   }
 }
