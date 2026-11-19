@@ -72,7 +72,7 @@ class SettingsPage extends StatelessWidget {
                       _SettingsTile(
                         icon: Icons.bug_report_outlined,
                         title: 'Send diagnostic data',
-                        subtitle: 'Upload connect log to your device record',
+                        subtitle: 'Helps us fix connection problems',
                         onTap: () => _sendDiagnosticData(context),
                       ),
                       const _SettingsDivider(),
