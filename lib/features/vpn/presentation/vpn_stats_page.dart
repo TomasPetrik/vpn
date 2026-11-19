@@ -227,81 +227,81 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _MetricCard(
-                              label: 'Total Consumed',
-                              icon: Icons.data_usage,
-                              iconColor: CyberShieldColors.secondaryContainer,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _MetricValue(
-                                    value: _splitBytes(totalBytes).$1,
-                                    unit: _splitBytes(totalBytes).$2,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    state.isConnected
-                                        ? 'Server usage · live tunnel'
-                                        : 'Server-reported usage',
-                                    style: CyberShieldTheme.bodySm(),
-                                  ),
-                                ],
+                      SizedBox(
+                        height: _analyticsCardHeight,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _MetricCard(
+                                label: 'Total Consumed',
+                                icon: Icons.data_usage,
+                                iconColor: CyberShieldColors.secondaryContainer,
+                                value: _MetricValue(
+                                  value: _splitBytes(totalBytes).$1,
+                                  unit: _splitBytes(totalBytes).$2,
+                                ),
+                                footer: Text(
+                                  state.isConnected
+                                      ? 'Server usage · live tunnel'
+                                      : 'Server-reported usage',
+                                  style: CyberShieldTheme.bodySm(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _MetricCard(
-                              label: 'Time Shielded',
-                              icon: Icons.timer_outlined,
-                              iconColor: CyberShieldColors.primary,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _DurationValue(
-                                    seconds: overall.activeSeconds,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    state.isConnected
-                                        ? 'Current tunnel active'
-                                        : 'Across encrypted sessions',
-                                    style: CyberShieldTheme.bodySm(),
-                                  ),
-                                ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _MetricCard(
+                                label: 'Time Shielded',
+                                icon: Icons.timer_outlined,
+                                iconColor: CyberShieldColors.primary,
+                                value: _DurationValue(
+                                  seconds: overall.activeSeconds,
+                                ),
+                                footer: Text(
+                                  state.isConnected
+                                      ? 'Current tunnel active'
+                                      : 'Across encrypted sessions',
+                                  style: CyberShieldTheme.bodySm(),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _TrafficShareCard(
-                              label: 'Download',
-                              icon: Icons.arrow_downward,
-                              accent: CyberShieldColors.secondaryContainer,
-                              bytes: periodRx,
-                              share: rxShare,
-                              avgPerDay: avgRxPerDay,
+                      SizedBox(
+                        height: _analyticsCardHeight,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _TrafficShareCard(
+                                label: 'Download',
+                                icon: Icons.arrow_downward,
+                                accent: CyberShieldColors.secondaryContainer,
+                                bytes: periodRx,
+                                share: rxShare,
+                                avgPerDay: avgRxPerDay,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _TrafficShareCard(
-                              label: 'Upload',
-                              icon: Icons.arrow_upward,
-                              accent: CyberShieldColors.primary,
-                              bytes: periodTx,
-                              share: txShare,
-                              avgPerDay: avgTxPerDay,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _TrafficShareCard(
+                                label: 'Upload',
+                                icon: Icons.arrow_upward,
+                                accent: CyberShieldColors.primary,
+                                bytes: periodTx,
+                                share: txShare,
+                                avgPerDay: avgTxPerDay,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _BandwidthPulseCard(
@@ -322,6 +322,9 @@ class _VpnStatsPageState extends State<VpnStatsPage> {
       ),
     );
   }
+
+  /// Shared height so Total / Time / Download / Upload tiles stay equal.
+  static const double _analyticsCardHeight = 124;
 
   static (String, String) _splitBytes(int bytes) {
     final formatted = VpnStatsFormat.bytes(bytes);
@@ -403,17 +406,20 @@ class _MetricCard extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.iconColor,
-    required this.child,
+    required this.value,
+    required this.footer,
   });
 
   final String label;
   final IconData icon;
   final Color iconColor;
-  final Widget child;
+  final Widget value;
+  final Widget footer;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
@@ -439,7 +445,9 @@ class _MetricCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          child,
+          value,
+          const Spacer(),
+          footer,
         ],
       ),
     );
@@ -521,6 +529,7 @@ class _TrafficShareCard extends StatelessWidget {
     final unit = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainerLow,
@@ -534,19 +543,24 @@ class _TrafficShareCard extends StatelessWidget {
               Expanded(
                 child: Text(label.toUpperCase(), style: CyberShieldTheme.labelBadge()),
               ),
-              Icon(icon, size: 16, color: accent),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: CyberShieldColors.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 16, color: accent),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text.rich(
             TextSpan(
               children: [
                 TextSpan(
                   text: value,
-                  style: CyberShieldTheme.headlineSm().copyWith(
-                    fontSize: 24,
-                    height: 32 / 24,
-                  ),
+                  style: CyberShieldTheme.metricStat(),
                 ),
                 TextSpan(
                   text: ' $unit',
@@ -557,7 +571,7 @@ class _TrafficShareCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const Spacer(),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
@@ -598,7 +612,7 @@ enum _PulseChartStyle { lines, columns }
 
 class _BandwidthPulseCardState extends State<_BandwidthPulseCard> {
   int? _scrubIndex;
-  _PulseChartStyle _style = _PulseChartStyle.lines;
+  _PulseChartStyle _style = _PulseChartStyle.columns;
 
   _StatsPeriod get period => widget.period;
   UsageSeries get series => widget.series;
@@ -883,7 +897,7 @@ class _BandwidthPulseCardState extends State<_BandwidthPulseCard> {
           else
             Text(
               total > 0
-                  ? 'Total ${VpnStatsFormat.bytes(total)} in selected window · drag chart for detail'
+                  ? 'Total ${VpnStatsFormat.bytes(total)} in selected window'
                   : 'No tunnel traffic in this window yet',
               style: CyberShieldTheme.bodySm(),
               textAlign: TextAlign.center,
