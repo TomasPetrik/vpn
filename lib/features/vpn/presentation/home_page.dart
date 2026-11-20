@@ -95,6 +95,10 @@ class HomePage extends StatelessWidget {
                       _TelemetryGrid(connect: connect, visual: visual),
                       const SizedBox(height: 8),
                       _ServerDetailCard(connect: connect, visual: visual),
+                      if (visual == _HubVisualState.connecting) ...[
+                        const SizedBox(height: 8),
+                        _TunnelNegotiationCard(phase: connect.phase),
+                      ],
                       if (isDevMode && connect.log.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         TextButton(
@@ -350,21 +354,25 @@ class _StatusHud extends StatelessWidget {
             ),
           ],
         ),
-        if (visual == _HubVisualState.connecting) ...[
-          const SizedBox(height: 6),
-          SizedBox(
-            width: 176,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                value: _handshakePercent(connect.phase) / 100,
-                minHeight: 4,
-                backgroundColor: CyberShieldColors.surfaceContainerHighest,
-                valueColor: const AlwaysStoppedAnimation(CyberShieldColors.secondaryContainer),
-              ),
-            ),
-          ),
-        ],
+        // Always reserve the handshake bar slot so dial/telemetry do not jump.
+        const SizedBox(height: 6),
+        SizedBox(
+          width: 176,
+          height: 4,
+          child: visual == _HubVisualState.connecting
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: _handshakePercent(connect.phase) / 100,
+                    minHeight: 4,
+                    backgroundColor: CyberShieldColors.surfaceContainerHighest,
+                    valueColor: const AlwaysStoppedAnimation(
+                      CyberShieldColors.secondaryContainer,
+                    ),
+                  ),
+                )
+              : const SizedBox.expand(),
+        ),
       ],
     );
   }
@@ -782,13 +790,16 @@ class _TelemetryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final muted = visual == _HubVisualState.disconnected;
     return Container(
+      height: 136,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
         color: CyberShieldColors.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
-        border: visual == _HubVisualState.connecting
-            ? Border.all(color: CyberShieldColors.outlineVariant.withValues(alpha: 0.3))
-            : null,
+        border: Border.all(
+          color: visual == _HubVisualState.connecting
+              ? CyberShieldColors.outlineVariant.withValues(alpha: 0.3)
+              : Colors.transparent,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,9 +824,11 @@ class _TelemetryCard extends StatelessWidget {
                       ? badgeColor.withValues(alpha: 0.18)
                       : CyberShieldColors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(4),
-                  border: visual == _HubVisualState.connecting
-                      ? Border.all(color: badgeColor.withValues(alpha: 0.2))
-                      : null,
+                  border: Border.all(
+                    color: visual == _HubVisualState.connecting
+                        ? badgeColor.withValues(alpha: 0.2)
+                        : Colors.transparent,
+                  ),
                 ),
                 child: Text(
                   badge,
@@ -827,25 +840,31 @@ class _TelemetryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: CyberShieldTheme.metricStat(
-                  color: muted ? CyberShieldColors.onSurfaceVariant : CyberShieldColors.onSurface,
+          SizedBox(
+            height: 32,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  style: CyberShieldTheme.metricStat(
+                    color: muted
+                        ? CyberShieldColors.onSurfaceVariant
+                        : CyberShieldColors.onSurface,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  unit,
-                  style: CyberShieldTheme.labelCode(color: accent),
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    unit,
+                    style: CyberShieldTheme.labelCode(color: accent),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 6),
           SizedBox(
@@ -855,7 +874,7 @@ class _TelemetryCard extends StatelessWidget {
               painter: _SparklinePainter(samples: samples, visual: visual, color: accent),
             ),
           ),
-          const SizedBox(height: 4),
+          const Spacer(),
           Row(
             children: [
               Text(footerLabel, style: CyberShieldTheme.labelCode()),
@@ -865,7 +884,9 @@ class _TelemetryCard extends StatelessWidget {
                 style: CyberShieldTheme.labelCode(
                   color: muted
                       ? CyberShieldColors.onSurfaceVariant
-                      : (visual == _HubVisualState.connecting ? accent : CyberShieldColors.onSurface),
+                      : (visual == _HubVisualState.connecting
+                          ? accent
+                          : CyberShieldColors.onSurface),
                   weight: FontWeight.w600,
                 ),
               ),
@@ -970,9 +991,11 @@ class _ServerDetailCardState extends State<_ServerDetailCard> {
           decoration: BoxDecoration(
             color: CyberShieldColors.surfaceContainer,
             borderRadius: BorderRadius.circular(12),
-            border: visual == _HubVisualState.connecting
-                ? Border.all(color: CyberShieldColors.outlineVariant.withValues(alpha: 0.3))
-                : null,
+            border: Border.all(
+              color: visual == _HubVisualState.connecting
+                  ? CyberShieldColors.outlineVariant.withValues(alpha: 0.3)
+                  : Colors.transparent,
+            ),
           ),
           child: Column(
             children: [
@@ -1073,12 +1096,6 @@ class _ServerDetailCardState extends State<_ServerDetailCard> {
                   ),
                 ],
               ),
-              if (visual == _HubVisualState.connecting) ...[
-                const SizedBox(height: 8),
-                const Divider(height: 1),
-                const SizedBox(height: 8),
-                _HandshakeProgress(phase: connect.phase),
-              ],
             ],
           ),
         );
@@ -1087,8 +1104,8 @@ class _ServerDetailCardState extends State<_ServerDetailCard> {
   }
 }
 
-class _HandshakeProgress extends StatelessWidget {
-  const _HandshakeProgress({required this.phase});
+class _TunnelNegotiationCard extends StatelessWidget {
+  const _TunnelNegotiationCard({required this.phase});
 
   final VpnConnectPhase phase;
 
@@ -1097,43 +1114,57 @@ class _HandshakeProgress extends StatelessWidget {
     final pct = _handshakePercent(phase);
     final step = pct <= 33 ? 1 : (pct <= 68 ? 2 : 3);
 
-    return Column(
-      children: [
-        Row(
-          children: [
-            Text('Tunnel Negotiation', style: CyberShieldTheme.labelCode()),
-            const Spacer(),
-            Text(
-              'Step $step of 3',
-              style: CyberShieldTheme.labelCode(color: CyberShieldColors.secondaryContainer, weight: FontWeight.w700),
-            ),
-          ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: CyberShieldColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: CyberShieldColors.outlineVariant.withValues(alpha: 0.3),
         ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: pct / 100,
-            minHeight: 6,
-            backgroundColor: CyberShieldColors.surfaceContainerHighest,
-            valueColor: const AlwaysStoppedAnimation(CyberShieldColors.secondaryContainer),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text('Tunnel Negotiation', style: CyberShieldTheme.labelCode()),
+              const Spacer(),
+              Text(
+                'Step $step of 3',
+                style: CyberShieldTheme.labelCode(
+                  color: CyberShieldColors.secondaryContainer,
+                  weight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _StepChip(done: step > 1, active: step == 1, label: 'DNS OK'),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: pct / 100,
+              minHeight: 6,
+              backgroundColor: CyberShieldColors.surfaceContainerHighest,
+              valueColor: const AlwaysStoppedAnimation(CyberShieldColors.secondaryContainer),
             ),
-            Expanded(
-              child: _StepChip(done: step > 2, active: step == 2, label: 'Keys $pct%'),
-            ),
-            Expanded(
-              child: _StepChip(done: step > 3, active: step == 3, label: 'Route'),
-            ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _StepChip(done: step > 1, active: step == 1, label: 'DNS OK'),
+              ),
+              Expanded(
+                child: _StepChip(done: step > 2, active: step == 2, label: 'Keys $pct%'),
+              ),
+              Expanded(
+                child: _StepChip(done: step > 3, active: step == 3, label: 'Route'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
