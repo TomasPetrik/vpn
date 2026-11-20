@@ -1,4 +1,4 @@
-package cz.tomaspetrik.petrikvpn
+package com.petrixon.vpn
 
 /**
  * JNI façade for [libwstunnel_ffi.so] built from native/wstunnel_ffi.

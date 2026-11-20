@@ -1,4 +1,4 @@
-package cz.tomaspetrik.petrikvpn
+package com.petrixon.vpn
 
 import java.net.Inet4Address
 import java.net.InetAddress

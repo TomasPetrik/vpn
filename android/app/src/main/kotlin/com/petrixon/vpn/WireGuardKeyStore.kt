@@ -1,4 +1,4 @@
-package cz.tomaspetrik.petrikvpn
+package com.petrixon.vpn
 
 import android.content.Context
 import android.content.SharedPreferences

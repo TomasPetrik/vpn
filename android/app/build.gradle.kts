@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "cz.tomaspetrik.petrikvpn"
+    namespace = "com.petrixon.vpn"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "cz.tomaspetrik.petrikvpn"
+        applicationId = "com.petrixon.vpn"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

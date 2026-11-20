@@ -10,7 +10,7 @@ use std::{ptr, slice};
 use crate::{wstunnel_client_is_running, wstunnel_client_start, wstunnel_client_stop};
 
 #[no_mangle]
-pub extern "system" fn Java_cz_tomaspetrik_petrikvpn_WstunnelFfi_nativeStart(
+pub extern "system" fn Java_com_petrixon_vpn_WstunnelFfi_nativeStart(
     mut env: JNIEnv,
     _class: JClass,
     config_json: JString,
@@ -57,7 +57,7 @@ pub extern "system" fn Java_cz_tomaspetrik_petrikvpn_WstunnelFfi_nativeStart(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_cz_tomaspetrik_petrikvpn_WstunnelFfi_nativeStop(
+pub extern "system" fn Java_com_petrixon_vpn_WstunnelFfi_nativeStop(
     _env: JNIEnv,
     _class: JClass,
 ) {
@@ -65,7 +65,7 @@ pub extern "system" fn Java_cz_tomaspetrik_petrikvpn_WstunnelFfi_nativeStop(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_cz_tomaspetrik_petrikvpn_WstunnelFfi_nativeIsRunning(
+pub extern "system" fn Java_com_petrixon_vpn_WstunnelFfi_nativeIsRunning(
     _env: JNIEnv,
     _class: JClass,
 ) -> jint {

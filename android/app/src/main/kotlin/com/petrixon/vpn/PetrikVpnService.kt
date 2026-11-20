@@ -1,4 +1,4 @@
-package cz.tomaspetrik.petrikvpn
+package com.petrixon.vpn
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -79,7 +79,7 @@ class PetrikVpnService : Service() {
     companion object {
         private const val CHANNEL_ID = "petrikvpn_tunnel"
         private const val NOTIFICATION_ID = 42
-        const val ACTION_STOP = "cz.tomaspetrik.petrikvpn.STOP_FG"
+        const val ACTION_STOP = "com.petrixon.vpn.STOP_FG"
 
         fun start(context: Context) {
             val intent = Intent(context, PetrikVpnService::class.java)
