@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -48,7 +49,13 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	list, err := h.listDevices(200)
+	filter := parseDeviceListFilter(r)
+	list, err := h.listDevices(200, filter)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	countries, err := h.listDeviceCountries()
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -70,8 +77,14 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	listQuery := filter.Query()
+	if analytics.RangeKey != "" {
+		listQuery = filter.QueryWith(url.Values{"range": {analytics.RangeKey}})
+	}
+
 	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
-		"Devices": list, "SelectedID": id, "Device": d, "Analytics": analytics, "CSRF": csrfFrom(r),
+		"Devices": list, "SelectedID": id, "Device": d, "Analytics": analytics,
+		"Filter": filter, "Countries": countries, "ListQuery": listQuery, "CSRF": csrfFrom(r),
 	})
 }
 
@@ -383,4 +396,12 @@ func humanBytes(n uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// compactTime formats UTC timestamps for dense admin lists, e.g. "19 Nov 17:41".
+func compactTime(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	return t.UTC().Format("2 Jan 15:04")
 }

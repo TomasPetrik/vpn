@@ -77,7 +77,7 @@ class _VpnPrivacyDisclosureSheet extends StatelessWidget {
                       title: 'What we collect',
                       body:
                           'Anonymous device registration, device/app metadata, '
-                          'WireGuard public key, and technical peer stats '
+                          'VPN public key, and technical connection stats '
                           '(handshake / byte counters). Optional diagnostic '
                           'reports only if you send them from Settings.',
                     ),

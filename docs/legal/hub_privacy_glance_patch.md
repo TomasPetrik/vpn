@@ -4,8 +4,8 @@ Under **What we process**, replace the list with:
 
 - Anonymous installation / device registration
 - Device & app version metadata
-- WireGuard public key and tunnel IP
-- Limited peer health / byte counters for operations
+- VPN public key and tunnel IP
+- Technical connection stats (handshake / byte counters)
 - API client IP / approximate country on the device record (security & support)
 - Optional diagnostic reports you send from Settings (connect log + device/VPN metadata)
 

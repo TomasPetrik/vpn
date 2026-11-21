@@ -12,6 +12,7 @@ import '../domain/public_network_info.dart';
 import '../domain/vpn_peer_config.dart';
 import 'device_api.dart';
 import 'device_info_source.dart';
+import 'installation_id.dart';
 
 class DeviceRepositoryImpl implements DeviceRepository {
   DeviceRepositoryImpl({
@@ -32,13 +33,11 @@ class DeviceRepositoryImpl implements DeviceRepository {
       await secureStore.clearToken();
     }
 
-    var installationId = await secureStore.readInstallationId();
-    if (installationId == null || installationId.isEmpty) {
-      installationId = const Uuid().v4();
-      await secureStore.writeInstallationId(installationId);
-    }
-
     final info = await deviceInfo.collect();
+    final installationId = await _resolveInstallationId(
+      platform: info.platform,
+      deviceIdentifier: info.deviceIdentifier,
+    );
     final body = <String, dynamic>{
       'installation_id': installationId,
       'device_identifier': info.deviceIdentifier,
@@ -155,5 +154,34 @@ class DeviceRepositoryImpl implements DeviceRepository {
       // No third-party IP/geo fallbacks — only our API.
     }
     return const PublicNetworkInfo();
+  }
+
+  /// Stable across rebuilds/reinstalls when a hardware/vendor ID is available.
+  ///
+  /// Same idea as merchant / wow_swift: prefer [MobileDeviceIdentifier], then
+  /// derive a deterministic UUID so `installation_id` does not change when
+  /// secure storage is wiped (new package name, reinstall, clear data).
+  Future<String> _resolveInstallationId({
+    required String platform,
+    required String? deviceIdentifier,
+  }) async {
+    final derived = stableInstallationId(
+      platform: platform,
+      deviceIdentifier: deviceIdentifier,
+    );
+    if (derived != null) {
+      final existing = await secureStore.readInstallationId();
+      if (existing != derived) {
+        await secureStore.writeInstallationId(derived);
+      }
+      return derived;
+    }
+
+    var installationId = await secureStore.readInstallationId();
+    if (installationId == null || installationId.isEmpty) {
+      installationId = const Uuid().v4();
+      await secureStore.writeInstallationId(installationId);
+    }
+    return installationId;
   }
 }

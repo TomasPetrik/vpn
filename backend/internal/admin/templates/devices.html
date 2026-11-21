@@ -3,20 +3,48 @@
   <aside class="master">
     <div class="master-head">
       <h1>Devices</h1>
-      <p>{{len .Devices}} registered</p>
+      <p>{{len .Devices}} shown</p>
+      <form class="list-filters" method="get" action="{{if .SelectedID}}/admin/devices/{{.SelectedID}}{{else}}/admin/devices{{end}}">
+        {{if and .Analytics .Analytics.RangeKey}}<input type="hidden" name="range" value="{{.Analytics.RangeKey}}">{{end}}
+        <label>
+          <span>Sort</span>
+          <select name="sort" onchange="this.form.submit()">
+            <option value="created" {{if .Filter.IsSort "created"}}selected{{end}}>Last added</option>
+            <option value="seen" {{if .Filter.IsSort "seen"}}selected{{end}}>Last seen</option>
+            <option value="traffic" {{if .Filter.IsSort "traffic"}}selected{{end}}>Traffic</option>
+          </select>
+        </label>
+        <label>
+          <span>Order</span>
+          <select name="dir" onchange="this.form.submit()">
+            <option value="desc" {{if .Filter.IsDir "desc"}}selected{{end}}>Desc</option>
+            <option value="asc" {{if .Filter.IsDir "asc"}}selected{{end}}>Asc</option>
+          </select>
+        </label>
+        <label>
+          <span>Country</span>
+          <select name="country" onchange="this.form.submit()">
+            <option value="" {{if .Filter.IsCountry ""}}selected{{end}}>All</option>
+            <option value="?" {{if .Filter.IsCountry "?"}}selected{{end}}>Unknown</option>
+            {{range .Countries}}
+            <option value="{{.}}" {{if $.Filter.IsCountry .}}selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </label>
+      </form>
     </div>
     <div class="master-list">
       {{range .Devices}}
-      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}{{if $.Analytics}}?range={{$.Analytics.RangeKey}}{{end}}">
+      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}?{{$.ListQuery}}">
         <div class="title">
           <span>{{if .Model}}{{.Model}}{{else}}{{.Platform}}{{end}}</span>
-          <span class="muted">{{.Platform}}</span>
+          <span class="muted">{{.Country}} · {{.Platform}}</span>
         </div>
-        <div class="meta">{{.AppVersion}} · build {{.Build}} · peers {{.PeerCount}}</div>
-        <div class="meta">{{.ID}}</div>
+        <div class="meta">{{.TrafficHuman}} · {{.AppVersion}} · build {{.Build}} · peers {{.PeerCount}}</div>
+        <div class="meta">added {{.Created}} · seen {{.LastSeen}}</div>
       </a>
       {{else}}
-      <div class="empty-detail">No devices yet</div>
+      <div class="empty-detail">No devices match</div>
       {{end}}
     </div>
   </aside>
@@ -31,7 +59,7 @@
       {{if .Analytics}}
       <div class="range-tabs">
         {{range .Analytics.Ranges}}
-        <a href="/admin/devices/{{$.SelectedID}}?range={{.Key}}" class="{{if eq $.Analytics.RangeKey .Key}}active{{end}}">{{.Label}}</a>
+        <a href="/admin/devices/{{$.SelectedID}}?range={{.Key}}&amp;{{$.Filter.Query}}" class="{{if eq $.Analytics.RangeKey .Key}}active{{end}}">{{.Label}}</a>
         {{end}}
       </div>
       <div class="kpi-grid">

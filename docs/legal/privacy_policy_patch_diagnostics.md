@@ -57,7 +57,7 @@ Also state: **We aim to respond to deletion requests within 30 days.**
 
 Prefer an unqualified VPN commitment paragraph (hosting as a separate sentence), e.g.:
 
-> We do not sell user data obtained through the VPN. We do not use VPN traffic content for advertising, analytics products, or other commercial purposes. We do not disclose user data obtained through the VPN to third parties for any purpose. Our VPN servers are operated by us in Germany; infrastructure hosting is under our control and instructions.
+> We do not sell user data obtained through the VPN. We do not use VPN traffic content for advertising, analytics products, or other commercial purposes. We do not disclose user data obtained through the VPN to third parties for any purpose. Our VPN servers are operated by us; infrastructure hosting is under our control and instructions.
 
 (Keep the existing “required by law” disclosure in Sharing if counsel wants it, but do not weaken the 5.4 commitment with broad third-party exceptions.)
 

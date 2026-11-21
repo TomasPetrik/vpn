@@ -1,18 +1,18 @@
 # Privacy Policy
 
 **Effective date:** 19 November 2026  
-**Last updated:** 19 November 2026  
+**Last updated:** 21 November 2026  
 **Service:** PetrikVPN mobile application (iOS and Android)  
 **Operator:** Petrixon (“we”, “us”, “our”)  
 **Privacy contact:** info@petrixon.com
 
-> **VPN privacy commitment (Apple App Store Guideline 5.4).** We do not sell user data obtained through the VPN. We do not use VPN traffic content for advertising, analytics products, or other commercial purposes. We do not disclose user data obtained through the VPN to third parties for any purpose. Our VPN servers are operated by us in Germany; infrastructure hosting is under our control and instructions.
+> **VPN privacy commitment (Apple App Store Guideline 5.4).** We do not sell user data obtained through the VPN. We do not use VPN traffic content for advertising, analytics products, or other commercial purposes. We do not disclose user data obtained through the VPN to third parties for any purpose. Our VPN servers are operated by us; infrastructure hosting is under our control and instructions.
 
 ## 1. Who we are
 
 PetrikVPN is operated by Petrixon. For privacy questions, data-access requests, or deletion requests, email **info@petrixon.com**.
 
-The VPN backend is operated by us on infrastructure we control (currently a server in Germany).
+The VPN service runs on servers we operate and control. Locations may change as we add capacity.
 
 ## 2. Scope and no accounts / no purchases
 
@@ -43,9 +43,9 @@ After registration we issue an opaque device token. The app stores it in the pla
 
 ### 3.3 VPN technical configuration
 
-- WireGuard public key generated on the device;
+- VPN public key generated on the device;
 - assigned tunnel IPv4 address;
-- optional peer statistics we maintain for operations (last handshake time, approximate bytes transferred, and time-bucketed transfer samples used for capacity charts).
+- technical connection stats we maintain for operations (handshake / byte counters, and time-bucketed transfer samples used for capacity charts).
 
 ### 3.4 Data stored only on your device
 
@@ -76,7 +76,7 @@ We use these reports only to troubleshoot connectivity and support requests. The
 
 ## 4. VPN traffic and what we do not log
 
-When the VPN is connected, your device’s IP traffic is encrypted from the device to our VPN server (WireGuard over a WebSocket/TLS transport) and then forwarded to the public internet.
+When the VPN is connected, your device’s IP traffic is encrypted from the device to our VPN server (encrypted tunnel over a WebSocket/TLS transport) and then forwarded to the public internet.
 
 For VPN-tunneled traffic we do not intentionally keep:
 
@@ -89,7 +89,7 @@ Aggregated or ephemeral peer counters (handshake / byte totals) may exist for ca
 ## 5. How we use data
 
 - to register the installation and issue a device token;
-- to provision and update WireGuard peer configuration;
+- to provision and update VPN peer configuration;
 - to operate, secure, and troubleshoot the VPN service;
 - to enforce app minimum-version / force-upgrade policies;
 - to prevent abuse (for example blocking a device that violates the Terms);
@@ -138,7 +138,7 @@ We may ask for limited additional information to verify that we are deleting the
 ## 10. Security
 
 - VPN tunnel traffic is encrypted between the app and our VPN endpoint.
-- Device tokens and WireGuard keys are handled as secrets; tokens are stored hashed at rest on the server.
+- Device tokens and VPN keys are handled as secrets; tokens are stored hashed at rest on the server.
 - Raw optional device identifiers are not stored; only an HMAC is kept.
 - No method of transmission or storage is 100% secure; use the service accordingly.
 
@@ -148,7 +148,7 @@ PetrikVPN is not directed at children under 13 (or the higher age required in yo
 
 ## 12. International transfers
 
-Our VPN server is currently located in Germany (EU). If you connect from outside the EU, your traffic and the limited device metadata described above are processed in the EU to provide the service.
+Depending on which server you use, your traffic and the limited device metadata described above are processed on infrastructure we operate so we can provide the VPN. Server locations shown in the app may change over time.
 
 ## 13. App Store and Google Play disclosures
 

@@ -60,7 +60,7 @@ func (h *Handler) UserDetail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		x.LastSeen = last.UTC().Format(time.RFC3339)
+		x.LastSeen = compactTime(last)
 		devices = append(devices, x)
 	}
 

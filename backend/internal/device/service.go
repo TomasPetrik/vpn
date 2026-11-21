@@ -133,20 +133,54 @@ func (s *Service) registerOnce(ctx context.Context, req RegisterRequest, idHash 
 		} else {
 			newHash = tokenHash
 		}
-		_, err = tx.ExecContext(ctx, `
-			UPDATE devices SET
-				manufacturer = COALESCE(NULLIF(?, ''), manufacturer),
-				model = COALESCE(NULLIF(?, ''), model),
-				os_version = COALESCE(NULLIF(?, ''), os_version),
-				app_version = COALESCE(NULLIF(?, ''), app_version),
-				app_build = ?,
-				identifier_hash = COALESCE(identifier_hash, ?),
-				token_hash = ?,
-				last_seen_at = ?,
-				updated_at = ?
-			WHERE id = ?`,
-			req.Manufacturer, req.Model, req.OSVersion, req.AppVersion, nullInt(req.AppBuild),
-			nullableBytes(idHash), newHash, now, now, deviceID)
+		// Refresh installation_id only when it does not collide with another row
+		// (UNIQUE devices_installation_uq). Matching by identifier_hash must still
+		// succeed even if a stale duplicate row already owns this installation_id.
+		canMoveInstallation := true
+		if req.InstallationID != "" {
+			var otherID string
+			err = tx.QueryRowContext(ctx, `
+				SELECT id FROM devices WHERE installation_id = ? AND id != ? LIMIT 1`,
+				req.InstallationID, deviceID).Scan(&otherID)
+			if err == nil {
+				canMoveInstallation = false
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return RegisterResult{}, err
+			}
+		}
+
+		if canMoveInstallation {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE devices SET
+					installation_id = ?,
+					manufacturer = COALESCE(NULLIF(?, ''), manufacturer),
+					model = COALESCE(NULLIF(?, ''), model),
+					os_version = COALESCE(NULLIF(?, ''), os_version),
+					app_version = COALESCE(NULLIF(?, ''), app_version),
+					app_build = ?,
+					identifier_hash = COALESCE(identifier_hash, ?),
+					token_hash = ?,
+					last_seen_at = ?,
+					updated_at = ?
+				WHERE id = ?`,
+				req.InstallationID, req.Manufacturer, req.Model, req.OSVersion, req.AppVersion, nullInt(req.AppBuild),
+				nullableBytes(idHash), newHash, now, now, deviceID)
+		} else {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE devices SET
+					manufacturer = COALESCE(NULLIF(?, ''), manufacturer),
+					model = COALESCE(NULLIF(?, ''), model),
+					os_version = COALESCE(NULLIF(?, ''), os_version),
+					app_version = COALESCE(NULLIF(?, ''), app_version),
+					app_build = ?,
+					identifier_hash = COALESCE(identifier_hash, ?),
+					token_hash = ?,
+					last_seen_at = ?,
+					updated_at = ?
+				WHERE id = ?`,
+				req.Manufacturer, req.Model, req.OSVersion, req.AppVersion, nullInt(req.AppBuild),
+				nullableBytes(idHash), newHash, now, now, deviceID)
+		}
 		if err != nil {
 			return RegisterResult{}, err
 		}

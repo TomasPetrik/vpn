@@ -118,13 +118,20 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
-	list, err := h.listDevices(200)
+	filter := parseDeviceListFilter(r)
+	list, err := h.listDevices(200, filter)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	countries, err := h.listDeviceCountries()
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
-		"Devices": list, "SelectedID": "", "CSRF": csrfFrom(r),
+		"Devices": list, "SelectedID": "", "Filter": filter, "Countries": countries,
+		"ListQuery": filter.Query(), "CSRF": csrfFrom(r),
 	})
 }
 

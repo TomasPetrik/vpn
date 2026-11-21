@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -351,7 +351,7 @@
 			);
 			mainGroup = 97C146E51CF9000F007C117D;
 			packageReferences = (
-				39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */,
+				39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -402,13 +402,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Runner/Pods-Runner-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -1075,7 +1071,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */ = {
+		39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "ThirdParty/wireguard-apple";
 		};
@@ -1084,7 +1080,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		1C132D0520D73C1F2D68A19D /* WireGuardKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "ThirdParty/wireguard-apple" */;
+			package = 39D7D191B6367F0AA6F83D61 /* XCLocalSwiftPackageReference "wireguard-apple" */;
 			productName = WireGuardKit;
 		};
 /* End XCSwiftPackageProductDependency section */

@@ -22,20 +22,22 @@ class CollectedDeviceInfo {
 }
 
 class DeviceInfoSource {
-  Future<CollectedDeviceInfo> collect() async {
-    String? deviceIdentifier;
-    try {
-      final raw = await MobileDeviceIdentifier().getDeviceId();
-      if (raw != null && raw.trim().isNotEmpty) {
-        deviceIdentifier = raw.trim();
-      }
-    } catch (_) {
-      deviceIdentifier = null;
-    }
+  DeviceInfoSource({
+    MobileDeviceIdentifier? mobileDeviceIdentifier,
+    DeviceInfoPlugin? deviceInfoPlugin,
+  })  : _mobileDeviceIdentifier =
+            mobileDeviceIdentifier ?? MobileDeviceIdentifier(),
+        _deviceInfoPlugin = deviceInfoPlugin ?? DeviceInfoPlugin();
 
-    final plugin = DeviceInfoPlugin();
+  final MobileDeviceIdentifier _mobileDeviceIdentifier;
+  final DeviceInfoPlugin _deviceInfoPlugin;
+
+  Future<CollectedDeviceInfo> collect() async {
     if (Platform.isIOS) {
-      final info = await plugin.iosInfo;
+      final info = await _deviceInfoPlugin.iosInfo;
+      final deviceIdentifier = await _resolveDeviceIdentifier(
+        fallback: info.identifierForVendor,
+      );
       return CollectedDeviceInfo(
         platform: 'ios',
         deviceIdentifier: deviceIdentifier,
@@ -46,7 +48,10 @@ class DeviceInfoSource {
       );
     }
 
-    final info = await plugin.androidInfo;
+    final info = await _deviceInfoPlugin.androidInfo;
+    final deviceIdentifier = await _resolveDeviceIdentifier(
+      fallback: info.id,
+    );
     return CollectedDeviceInfo(
       platform: 'android',
       deviceIdentifier: deviceIdentifier,
@@ -55,5 +60,29 @@ class DeviceInfoSource {
       osVersion: info.version.release,
       isPhysicalDevice: info.isPhysicalDevice,
     );
+  }
+
+  /// Prefer [mobile_device_identifier] (Widevine / Keychain+IFV — same approach
+  /// as mobile-flutter-merchant and wow_swift). Fall back to platform IDs from
+  /// device_info_plus when the plugin returns null (common on some emulators).
+  Future<String?> _resolveDeviceIdentifier({String? fallback}) async {
+    try {
+      final raw = await _mobileDeviceIdentifier.getDeviceId();
+      final trimmed = raw?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    } catch (_) {
+      // Fall through to platform identifier.
+    }
+
+    final trimmedFallback = fallback?.trim();
+    if (trimmedFallback != null &&
+        trimmedFallback.isNotEmpty &&
+        trimmedFallback.toLowerCase() != 'unknown' &&
+        trimmedFallback != '00000000-0000-0000-0000-000000000000') {
+      return trimmedFallback;
+    }
+    return null;
   }
 }

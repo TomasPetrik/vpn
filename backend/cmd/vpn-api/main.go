@@ -19,6 +19,7 @@ import (
 	"github.com/TomasPetrik/vpn/backend/internal/device"
 	"github.com/TomasPetrik/vpn/backend/internal/geo"
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
+	"github.com/TomasPetrik/vpn/backend/internal/maintenance"
 	"github.com/TomasPetrik/vpn/backend/internal/peer"
 	"github.com/TomasPetrik/vpn/backend/internal/serverinfo"
 	wgpkg "github.com/TomasPetrik/vpn/backend/internal/wg"
@@ -27,7 +28,7 @@ import (
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if len(os.Args) < 2 {
-		fatal(log, "usage: vpn-api <serve|migrate|admin>")
+		fatal(log, "usage: vpn-api <serve|migrate|admin|maintenance>")
 	}
 	switch os.Args[1] {
 	case "serve":
@@ -46,6 +47,10 @@ func main() {
 			fatal(log, "usage: vpn-api admin create <username>")
 		}
 		if err := runAdminCreate(log, os.Args[3]); err != nil {
+			fatal(log, err.Error())
+		}
+	case "maintenance":
+		if err := runMaintenance(log, os.Args[2:]); err != nil {
 			fatal(log, err.Error())
 		}
 	default:
@@ -78,6 +83,29 @@ func runMigrate(log *slog.Logger) error {
 	}
 	log.Info("migrations applied")
 	return nil
+}
+
+func runMaintenance(log *slog.Logger, args []string) error {
+	if len(args) < 1 || args[0] != "merge-duplicate-models" {
+		return fmt.Errorf("usage: vpn-api maintenance merge-duplicate-models [--apply]")
+	}
+	apply := false
+	for _, a := range args[1:] {
+		if a == "--apply" {
+			apply = true
+		}
+	}
+	sqlDB, cfg := openDB(log)
+	defer sqlDB.Close()
+	wgDriver, err := wgpkg.New(cfg.WGDriver, cfg.WGInterface)
+	if err != nil {
+		return fmt.Errorf("wireguard driver: %w", err)
+	}
+	ctx := context.Background()
+	if !apply {
+		log.Info("dry-run only; pass --apply to mutate")
+	}
+	return maintenance.MergeDuplicateModels(ctx, sqlDB, wgDriver, log, apply)
 }
 
 func runAdminCreate(log *slog.Logger, username string) error {
