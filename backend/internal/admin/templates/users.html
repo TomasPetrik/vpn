@@ -39,6 +39,36 @@
           </table>
         </div>
       </div>
+      {{if .Limits}}
+      <div class="card">
+        <h2>Limits</h2>
+        <p class="muted" style="margin:0 0 .75rem;font-size:.85rem">
+          Effective: ↓ {{.Limits.DownloadHuman}} · ↑ {{.Limits.UploadHuman}} · quota {{.Limits.QuotaHuman}}.
+          Used this month (all devices): {{.Limits.UsedHuman}}. Empty override inherits plan/global.
+        </p>
+        <form method="post" action="/admin/users/{{.User.ID}}/limits" class="limits-form">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <div class="limits-grid">
+            <label>Plan
+              <select name="plan">
+                <option value="free" {{if eq .Limits.Plan "free"}}selected{{end}}>free</option>
+                <option value="pro" {{if eq .Limits.Plan "pro"}}selected{{end}}>pro</option>
+              </select>
+            </label>
+            <label>Download kbps
+              <input name="download_kbps" value="{{.Limits.DownloadKbpsForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+            <label>Upload kbps
+              <input name="upload_kbps" value="{{.Limits.UploadKbpsForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+            <label>Monthly quota (bytes)
+              <input name="monthly_quota_bytes" value="{{.Limits.QuotaBytesForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+          </div>
+          <button type="submit" class="btn">Save user limits</button>
+        </form>
+      </div>
+      {{end}}
       <div class="card">
         <h2>Devices</h2>
         {{if .User.Devices}}

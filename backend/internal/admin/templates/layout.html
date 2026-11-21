@@ -487,6 +487,45 @@
       color: var(--muted-foreground);
     }
     .master-item.active .meta { color: rgb(107 107 107 / 0.9); }
+    .limits-grid {
+      display: grid;
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+    @media (min-width: 640px) {
+      .limits-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (min-width: 900px) {
+      .limits-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .limits-form label {
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+      font-size: .8rem;
+      color: var(--muted-foreground);
+    }
+    .limits-form input,
+    .limits-form select {
+      font: inherit;
+      font-size: .9rem;
+      color: var(--foreground);
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: .45rem;
+      padding: .45rem .55rem;
+    }
+    .limits-form .btn {
+      font: inherit;
+      font-size: .875rem;
+      font-weight: 600;
+      padding: .45rem .9rem;
+      border-radius: .45rem;
+      border: none;
+      background: var(--foreground);
+      color: var(--background);
+      cursor: pointer;
+    }
     .detail-body {
       overflow: auto;
       flex: 1;
@@ -624,6 +663,10 @@
           <a href="/admin/app-versions" data-match="^/admin/app-versions">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m7.8 16.2-2.9 2.9"/><path d="M6 12H2"/><path d="m7.8 7.8-2.9-2.9"/><circle cx="12" cy="12" r="3"/></svg>
             App versions
+          </a>
+          <a href="/admin/limits" data-match="^/admin/limits">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>
+            Limits
           </a>
         </div>
         <div class="nav-group">

@@ -1,0 +1,94 @@
+{{template "header" .}}
+<div style="max-width:52rem">
+  <h1>Limits</h1>
+  <p class="page-intro">
+    Speed (kbps) and monthly data quota. Empty = inherit / unlimited.
+    Enter <code>0</code> for explicit unlimited. Enforcement is not active yet — values are stored for admin and the app API.
+  </p>
+  {{if eq .Flash "1"}}
+  <p class="muted" style="margin:0 0 1rem;color:#1a7f37">Saved.</p>
+  {{end}}
+
+  <div class="card" style="margin-bottom:1rem">
+    <h2>Global defaults</h2>
+    <p class="muted" style="margin:0 0 .75rem;font-size:.85rem">Applies to everyone unless a plan, user, or device overrides.</p>
+    <form method="post" action="/admin/limits" class="limits-form">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="hidden" name="scope" value="global">
+      <div class="limits-grid">
+        <label>Download kbps
+          <input name="download_kbps" value="{{.Global.DownloadKbps}}" placeholder="unlimited" inputmode="numeric">
+        </label>
+        <label>Upload kbps
+          <input name="upload_kbps" value="{{.Global.UploadKbps}}" placeholder="unlimited" inputmode="numeric">
+        </label>
+        <label>Monthly quota (bytes)
+          <input name="monthly_quota_bytes" value="{{.Global.MonthlyQuotaBytes}}" placeholder="unlimited" inputmode="numeric">
+        </label>
+      </div>
+      <button type="submit" class="btn">Save global</button>
+    </form>
+  </div>
+
+  {{range .Plans}}
+  <div class="card" style="margin-bottom:1rem">
+    <h2>Plan: {{.Code}}</h2>
+    <p class="muted" style="margin:0 0 .75rem;font-size:.85rem">Defaults for users on this plan. Empty inherits global.</p>
+    <form method="post" action="/admin/limits" class="limits-form">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      <input type="hidden" name="scope" value="plan">
+      <input type="hidden" name="plan" value="{{.Code}}">
+      <div class="limits-grid">
+        <label>Download kbps
+          <input name="download_kbps" value="{{.DownloadKbps}}" placeholder="inherit" inputmode="numeric">
+        </label>
+        <label>Upload kbps
+          <input name="upload_kbps" value="{{.UploadKbps}}" placeholder="inherit" inputmode="numeric">
+        </label>
+        <label>Monthly quota (bytes)
+          <input name="monthly_quota_bytes" value="{{.MonthlyQuotaBytes}}" placeholder="inherit" inputmode="numeric">
+        </label>
+      </div>
+      <button type="submit" class="btn">Save {{.Code}}</button>
+    </form>
+  </div>
+  {{end}}
+</div>
+<style>
+  .limits-grid {
+    display: grid;
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  @media (min-width: 640px) {
+    .limits-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  .limits-form label {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    font-size: .8rem;
+    color: var(--muted-foreground);
+  }
+  .limits-form input {
+    font: inherit;
+    font-size: .9rem;
+    color: var(--foreground);
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: .45rem;
+    padding: .45rem .55rem;
+  }
+  .limits-form .btn {
+    font: inherit;
+    font-size: .875rem;
+    font-weight: 600;
+    padding: .45rem .9rem;
+    border-radius: .45rem;
+    border: none;
+    background: var(--foreground);
+    color: var(--background);
+    cursor: pointer;
+  }
+</style>
+{{template "footer" .}}

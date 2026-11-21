@@ -72,6 +72,20 @@
         </div>
         <div class="stat">
           <div>
+            <p class="label">Avg speed (MBps)</p>
+            <p class="value" style="font-size:1.15rem">↓ {{.Analytics.AvgDownMBps}} · ↑ {{.Analytics.AvgUpMBps}}</p>
+            <p class="label" style="margin-top:.35rem">active ↓ {{.Analytics.ActiveAvgDownMBps}} · ↑ {{.Analytics.ActiveAvgUpMBps}}</p>
+          </div>
+        </div>
+        <div class="stat">
+          <div>
+            <p class="label">Max / current (MBps)</p>
+            <p class="value" style="font-size:1.15rem">max ↓ {{.Analytics.MaxDownMBps}} · ↑ {{.Analytics.MaxUpMBps}}</p>
+            <p class="label" style="margin-top:.35rem">now ↓ {{.Analytics.CurrentDownMBps}} · ↑ {{.Analytics.CurrentUpMBps}}</p>
+          </div>
+        </div>
+        <div class="stat">
+          <div>
             <p class="label">Handshakes</p>
             <p class="value">{{.Analytics.Handshakes}}</p>
             <p class="label" style="margin-top:.35rem">lifetime observed {{.Device.HandshakeCount}}</p>
@@ -91,17 +105,18 @@
           <div class="chart-box"><canvas id="chart-transfer"></canvas></div>
         </div>
         <div class="card">
-          <h2>Handshakes</h2>
-          <div class="chart-box"><canvas id="chart-hs"></canvas></div>
+          <h2>Speed (MBps)</h2>
+          <div class="chart-box"><canvas id="chart-speed"></canvas></div>
         </div>
       </div>
       <script type="application/json" id="analytics-series">{{.Analytics.SeriesJSON}}</script>
+      <script type="application/json" id="speed-series">{{.Analytics.SpeedSeriesJSON}}</script>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
       <script>
       (function () {
+        if (!window.Chart) return;
         var el = document.getElementById('analytics-series');
-        if (!el || !window.Chart) return;
-        var data = JSON.parse(el.textContent || '[]');
+        var data = el ? JSON.parse(el.textContent || '[]') : [];
         var labels = data.map(function (p) { return p.label; });
         var common = {
           responsive: true, maintainAspectRatio: false,
@@ -119,15 +134,46 @@
           ]},
           options: common
         });
-        new Chart(document.getElementById('chart-hs'), {
+        var sel = document.getElementById('speed-series');
+        var speed = sel ? JSON.parse(sel.textContent || '[]') : [];
+        var sl = speed.map(function (p) { return p.label; });
+        new Chart(document.getElementById('chart-speed'), {
           type: 'line',
-          data: { labels: labels, datasets: [
-            { label: 'Handshakes', data: data.map(function (p) { return p.hs; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+          data: { labels: sl, datasets: [
+            { label: 'Avg ↓', data: speed.map(function (p) { return p.avg_down; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+            { label: 'Max ↓', data: speed.map(function (p) { return p.max_down; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+            { label: 'Avg ↑', data: speed.map(function (p) { return p.avg_up; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+            { label: 'Max ↑', data: speed.map(function (p) { return p.max_up; }), borderColor: '#c45a48', tension: 0.3, pointRadius: 0, borderWidth: 2, borderDash: [4, 3] }
           ]},
           options: common
         });
       })();
       </script>
+      {{end}}
+
+      {{if .Limits}}
+      <div class="card">
+        <h2>Limits</h2>
+        <p class="muted" style="margin:0 0 .75rem;font-size:.85rem">
+          Effective: ↓ {{.Limits.DownloadHuman}} · ↑ {{.Limits.UploadHuman}} · quota {{.Limits.QuotaHuman}}
+          (plan {{.Limits.Plan}}). Used this month: {{.Limits.UsedHuman}}. Empty override inherits.
+        </p>
+        <form method="post" action="/admin/devices/{{.Device.ID}}/limits" class="limits-form">
+          <input type="hidden" name="csrf" value="{{.CSRF}}">
+          <div class="limits-grid">
+            <label>Download kbps
+              <input name="download_kbps" value="{{.Limits.DownloadKbpsForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+            <label>Upload kbps
+              <input name="upload_kbps" value="{{.Limits.UploadKbpsForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+            <label>Monthly quota (bytes)
+              <input name="monthly_quota_bytes" value="{{.Limits.QuotaBytesForm}}" placeholder="inherit" inputmode="numeric">
+            </label>
+          </div>
+          <button type="submit" class="btn">Save device limits</button>
+        </form>
+      </div>
       {{end}}
 
       <div class="card">

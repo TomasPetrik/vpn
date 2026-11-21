@@ -52,6 +52,26 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
     </div>
   </div>
+  <div class="stat">
+    <div>
+      <p class="label">Avg speed (MBps)</p>
+      <p class="value" style="font-size:1.25rem">↓ {{.Analytics.AvgDownMBps}} · ↑ {{.Analytics.AvgUpMBps}}</p>
+      <p class="label" style="margin-top:.35rem">when active ↓ {{.Analytics.ActiveAvgDownMBps}} · ↑ {{.Analytics.ActiveAvgUpMBps}}</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+  </div>
+  <div class="stat">
+    <div>
+      <p class="label">Max / current (MBps)</p>
+      <p class="value" style="font-size:1.25rem">max ↓ {{.Analytics.MaxDownMBps}} · ↑ {{.Analytics.MaxUpMBps}}</p>
+      <p class="label" style="margin-top:.35rem">now ↓ {{.Analytics.CurrentDownMBps}} · ↑ {{.Analytics.CurrentUpMBps}}</p>
+    </div>
+    <div class="icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    </div>
+  </div>
 </div>
 
 <div class="charts-grid">
@@ -60,8 +80,8 @@
     <div class="chart-box"><canvas id="chart-transfer"></canvas></div>
   </div>
   <div class="card">
-    <h2>Handshakes</h2>
-    <div class="chart-box"><canvas id="chart-hs"></canvas></div>
+    <h2>Speed (MBps)</h2>
+    <div class="chart-box"><canvas id="chart-speed"></canvas></div>
   </div>
 </div>
 
@@ -105,12 +125,13 @@
 </div>
 
 <script type="application/json" id="analytics-series">{{.Analytics.SeriesJSON}}</script>
+<script type="application/json" id="speed-series">{{.Analytics.SpeedSeriesJSON}}</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+  if (!window.Chart) return;
   var el = document.getElementById('analytics-series');
-  if (!el || !window.Chart) return;
-  var data = JSON.parse(el.textContent || '[]');
+  var data = el ? JSON.parse(el.textContent || '[]') : [];
   var labels = data.map(function (p) { return p.label; });
   var common = {
     responsive: true,
@@ -121,27 +142,37 @@
       y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(17,17,17,0.06)' } }
     }
   };
-  new Chart(document.getElementById('chart-transfer'), {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'RX (to client)', data: data.map(function (p) { return p.rx; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
-        { label: 'TX (from client)', data: data.map(function (p) { return p.tx; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 }
-      ]
-    },
-    options: common
-  });
-  new Chart(document.getElementById('chart-hs'), {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        { label: 'Handshakes', data: data.map(function (p) { return p.hs; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2 }
-      ]
-    },
-    options: common
-  });
+  if (document.getElementById('chart-transfer')) {
+    new Chart(document.getElementById('chart-transfer'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'RX (to client)', data: data.map(function (p) { return p.rx; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+          { label: 'TX (from client)', data: data.map(function (p) { return p.tx; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 }
+        ]
+      },
+      options: common
+    });
+  }
+  var sel = document.getElementById('speed-series');
+  var speed = sel ? JSON.parse(sel.textContent || '[]') : [];
+  var sl = speed.map(function (p) { return p.label; });
+  if (document.getElementById('chart-speed')) {
+    new Chart(document.getElementById('chart-speed'), {
+      type: 'line',
+      data: {
+        labels: sl,
+        datasets: [
+          { label: 'Avg ↓', data: speed.map(function (p) { return p.avg_down; }), borderColor: '#111', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+          { label: 'Max ↓', data: speed.map(function (p) { return p.max_down; }), borderColor: '#6b6b6b', tension: 0.3, pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+          { label: 'Avg ↑', data: speed.map(function (p) { return p.avg_up; }), borderColor: '#e87561', tension: 0.3, pointRadius: 0, borderWidth: 2 },
+          { label: 'Max ↑', data: speed.map(function (p) { return p.max_up; }), borderColor: '#c45a48', tension: 0.3, pointRadius: 0, borderWidth: 2, borderDash: [4, 3] }
+        ]
+      },
+      options: common
+    });
+  }
 })();
 </script>
 {{template "footer" .}}

@@ -218,6 +218,10 @@ func runServe(log *slog.Logger) error {
 	mux.Handle("GET /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsGet)))
 	mux.Handle("GET /admin/app-versions/{platform}", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsGet)))
 	mux.Handle("POST /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsPost)))
+	mux.Handle("GET /admin/limits", adminH.RequireAuth(http.HandlerFunc(adminH.LimitsGet)))
+	mux.Handle("POST /admin/limits", adminH.RequireAuth(http.HandlerFunc(adminH.LimitsPost)))
+	mux.Handle("POST /admin/users/{id}/limits", adminH.RequireAuth(http.HandlerFunc(adminH.UserLimitsPost)))
+	mux.Handle("POST /admin/devices/{id}/limits", adminH.RequireAuth(http.HandlerFunc(adminH.DeviceLimitsPost)))
 	mux.Handle("GET /admin/database", adminH.RequireAuth(http.HandlerFunc(adminH.DatabaseIndex)))
 	mux.Handle("GET /admin/database/{table}", adminH.RequireAuth(http.HandlerFunc(adminH.DatabaseTable)))
 

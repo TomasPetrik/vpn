@@ -22,34 +22,60 @@ type seriesPoint struct {
 	HS    int64   `json:"hs"`
 }
 
+type speedSeriesPoint struct {
+	Label   string  `json:"label"`
+	AvgDown float64 `json:"avg_down"`
+	AvgUp   float64 `json:"avg_up"`
+	MaxDown float64 `json:"max_down"`
+	MaxUp   float64 `json:"max_up"`
+}
+
 type rankedItem struct {
 	Label string
 	Count int64
 }
 
 type analyticsView struct {
-	RangeKey      string
-	Ranges        []analyticsRange
-	TotalRX       uint64
-	TotalTX       uint64
-	TotalRXHuman  string
-	TotalTXHuman  string
-	TotalHuman    string
-	Handshakes    int64
-	ActivePeers   int64
-	Devices       int64
-	SeriesJSON    template.JS
-	Routes        []rankedItem
-	Platforms     []rankedItem
-	Versions      []rankedItem
-	ClientCountry string
-	ServerCountry string
-	RouteLabel    string
+	RangeKey           string
+	Ranges             []analyticsRange
+	TotalRX            uint64
+	TotalTX            uint64
+	TotalRXHuman       string
+	TotalTXHuman       string
+	TotalHuman         string
+	Handshakes         int64
+	ActivePeers        int64
+	Devices            int64
+	AvgDownMBps           string
+	AvgUpMBps             string
+	ActiveAvgDownMBps     string
+	ActiveAvgUpMBps       string
+	MaxDownMBps           string
+	MaxUpMBps             string
+	CurrentDownMBps       string
+	CurrentUpMBps         string
+	SeriesJSON            template.JS
+	SpeedSeriesJSON       template.JS
+	Routes                []rankedItem
+	Platforms             []rankedItem
+	Versions              []rankedItem
+	ClientCountry         string
+	ServerCountry         string
+	RouteLabel            string
 }
 
 func (h *Handler) loadAnalytics(r *http.Request, deviceID string) (analyticsView, error) {
 	rangeKey := r.URL.Query().Get("range")
 	series, err := usage.Load(r.Context(), h.DB, deviceID, rangeKey, time.Now().UTC())
+	if err != nil {
+		return analyticsView{}, err
+	}
+	now := time.Now().UTC()
+	speed, err := usage.LoadSpeed(r.Context(), h.DB, deviceID, series.Range, now)
+	if err != nil {
+		return analyticsView{}, err
+	}
+	speedSeries, err := usage.LoadSpeedSeries(r.Context(), h.DB, deviceID, series.Range, now)
 	if err != nil {
 		return analyticsView{}, err
 	}
@@ -60,12 +86,20 @@ func (h *Handler) loadAnalytics(r *http.Request, deviceID string) (analyticsView
 			{Key: "7d", Label: "7d"},
 			{Key: "30d", Label: "30d"},
 		},
-		TotalRX:      series.TotalRxBytes,
-		TotalTX:      series.TotalTxBytes,
-		Handshakes:   series.TotalHandshakes,
-		TotalRXHuman: humanBytes(series.TotalRxBytes),
-		TotalTXHuman: humanBytes(series.TotalTxBytes),
-		TotalHuman:   humanBytes(series.TotalRxBytes + series.TotalTxBytes),
+		TotalRX:           series.TotalRxBytes,
+		TotalTX:           series.TotalTxBytes,
+		Handshakes:        series.TotalHandshakes,
+		TotalRXHuman:      humanBytes(series.TotalRxBytes),
+		TotalTXHuman:      humanBytes(series.TotalTxBytes),
+		TotalHuman:        humanBytes(series.TotalRxBytes + series.TotalTxBytes),
+		AvgDownMBps:       usage.FormatMBps(speed.DownloadMBps),
+		AvgUpMBps:         usage.FormatMBps(speed.UploadMBps),
+		ActiveAvgDownMBps: usage.FormatMBps(speed.ActiveDownloadMBps),
+		ActiveAvgUpMBps:   usage.FormatMBps(speed.ActiveUploadMBps),
+		MaxDownMBps:       usage.FormatMBps(speed.MaxDownloadMBps),
+		MaxUpMBps:         usage.FormatMBps(speed.MaxUploadMBps),
+		CurrentDownMBps:   usage.FormatMBps(speed.CurrentDownloadMBps),
+		CurrentUpMBps:     usage.FormatMBps(speed.CurrentUploadMBps),
 	}
 
 	chart := make([]seriesPoint, 0, len(series.Points))
@@ -79,6 +113,19 @@ func (h *Handler) loadAnalytics(r *http.Request, deviceID string) (analyticsView
 	}
 	b, _ := json.Marshal(chart)
 	v.SeriesJSON = template.JS(b)
+
+	speedChart := make([]speedSeriesPoint, 0, len(speedSeries))
+	for _, p := range speedSeries {
+		speedChart = append(speedChart, speedSeriesPoint{
+			Label:   p.Label,
+			AvgDown: p.AvgDownMBps,
+			AvgUp:   p.AvgUpMBps,
+			MaxDown: p.MaxDownMBps,
+			MaxUp:   p.MaxUpMBps,
+		})
+	}
+	sb, _ := json.Marshal(speedChart)
+	v.SpeedSeriesJSON = template.JS(sb)
 
 	activeQ := `
 		SELECT COUNT(*) FROM wireguard_peers p

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/TomasPetrik/vpn/backend/internal/httpapi"
+	"github.com/TomasPetrik/vpn/backend/internal/limits"
 	"github.com/TomasPetrik/vpn/backend/internal/usage"
 )
 
@@ -98,12 +99,42 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	if h.Service != nil && h.Service.CountryOf != nil && clientIP != "" {
 		country = h.Service.CountryOf(clientIP)
 	}
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"user_id":        u,
 		"device_id":      d,
 		"client_ip":      clientIP,
 		"client_country": country,
-	})
+	}
+	if h.DB != nil {
+		now := time.Now().UTC()
+		store := &limits.Store{DB: h.DB}
+		if eff, err := store.ForDevice(r.Context(), d, now); err == nil {
+			out["plan"] = eff.PlanCode
+			out["limits"] = map[string]any{
+				"download_kbps":        limits.APIValue(eff.DownloadKbps),
+				"upload_kbps":          limits.APIValue(eff.UploadKbps),
+				"monthly_quota_bytes":  limits.APIValue(eff.MonthlyQuotaBytes),
+				"monthly_used_bytes":   eff.MonthlyUsedBytes,
+				"download_source":      eff.DownloadSource,
+				"upload_source":        eff.UploadSource,
+				"monthly_quota_source": eff.MonthlyQuotaSource,
+			}
+		}
+		if speed, err := usage.LoadSpeed(r.Context(), h.DB, d, "24h", now); err == nil {
+			out["avg_speed"] = map[string]any{
+				"download_MBps":         speed.DownloadMBps,
+				"upload_MBps":           speed.UploadMBps,
+				"active_download_MBps":  speed.ActiveDownloadMBps,
+				"active_upload_MBps":    speed.ActiveUploadMBps,
+				"max_download_MBps":     speed.MaxDownloadMBps,
+				"max_upload_MBps":       speed.MaxUploadMBps,
+				"current_download_MBps": speed.CurrentDownloadMBps,
+				"current_upload_MBps":   speed.CurrentUploadMBps,
+				"range":                 speed.Range,
+			}
+		}
+	}
+	httpapi.WriteJSON(w, http.StatusOK, out)
 }
 
 // Usage returns zero-filled transfer buckets for the authenticated device.

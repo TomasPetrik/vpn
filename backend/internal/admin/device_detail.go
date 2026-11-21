@@ -77,6 +77,12 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	limitsView, lerr := h.loadLimitsViewForDevice(r, id)
+	if lerr != nil {
+		http.Error(w, lerr.Error(), 500)
+		return
+	}
+
 	listQuery := filter.Query()
 	if analytics.RangeKey != "" {
 		listQuery = filter.QueryWith(url.Values{"range": {analytics.RangeKey}})
@@ -84,6 +90,7 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 
 	_ = h.Tmpl.ExecuteTemplate(w, "devices.html", map[string]any{
 		"Devices": list, "SelectedID": id, "Device": d, "Analytics": analytics,
+		"Limits": limitsView,
 		"Filter": filter, "Countries": countries, "ListQuery": listQuery, "CSRF": csrfFrom(r),
 	})
 }

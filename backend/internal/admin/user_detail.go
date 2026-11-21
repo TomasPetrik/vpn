@@ -72,7 +72,13 @@ func (h *Handler) UserDetail(w http.ResponseWriter, r *http.Request) {
 		Devices:     devices,
 	}
 
+	limitsView, lerr := h.loadLimitsViewForUser(r, id)
+	if lerr != nil {
+		http.Error(w, lerr.Error(), 500)
+		return
+	}
+
 	_ = h.Tmpl.ExecuteTemplate(w, "users.html", map[string]any{
-		"Users": list, "SelectedID": id, "User": detail, "CSRF": csrfFrom(r),
+		"Users": list, "SelectedID": id, "User": detail, "Limits": limitsView, "CSRF": csrfFrom(r),
 	})
 }
