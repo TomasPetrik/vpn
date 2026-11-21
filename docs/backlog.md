@@ -18,7 +18,7 @@ Last updated: 2026-11-19
 5. ~~**Admin traffic counters**~~ — fixed: vpn-api syncs `wg` peer RX/TX + handshake into MySQL every 15s and on device detail load.
 6. ~~**Connect UI handshake / RX/TX**~~ — session stats on Home (1s poll) + overall Statistics screen.
 7. **Privacy leftovers (before App Store submit)**
-   - App: bundle Inter and JetBrains Mono so `google_fonts` does not fetch from Google at runtime.
+   - ~~App: bundle Inter and JetBrains Mono so `google_fonts` does not fetch from Google at runtime.~~ — bundled under `assets/fonts/`; `google_fonts` removed.
    - ~~Drop `api.country.is` / `api.ipify.org`~~ — country/IP from our API only.
    - ~~In-app Privacy/Terms + deletion + pre-Connect disclosure~~ — Settings + connect sheet.
    - **Publish** `docs/legal/privacy_policy.md` (+ hub glance patch) on petrixon.com (Websupport). Until then the live policy is behind the app.

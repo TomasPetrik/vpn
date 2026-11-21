@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'cyber_shield_colors.dart';
 
 abstract final class CyberShieldTheme {
+  static const String _inter = 'Inter';
+  static const String _mono = 'JetBrainsMono';
+
   static ThemeData dark() {
-    final inter = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+    final base = ThemeData.dark().textTheme;
+    final inter = base.apply(
+      fontFamily: _inter,
+      bodyColor: CyberShieldColors.onSurface,
+      displayColor: CyberShieldColors.onSurface,
+    );
     final colorScheme = const ColorScheme.dark(
       brightness: Brightness.dark,
       primary: CyberShieldColors.primary,
@@ -41,12 +48,10 @@ abstract final class CyberShieldTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: colorScheme,
+      fontFamily: _inter,
       scaffoldBackgroundColor: CyberShieldColors.background,
       canvasColor: CyberShieldColors.background,
-      textTheme: inter.apply(
-        bodyColor: CyberShieldColors.onSurface,
-        displayColor: CyberShieldColors.onSurface,
-      ),
+      textTheme: inter,
       appBarTheme: AppBarTheme(
         backgroundColor: CyberShieldColors.surfaceContainerLowest.withValues(
           alpha: 0.8,
@@ -56,7 +61,8 @@ abstract final class CyberShieldTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         systemOverlayStyle: SystemUiOverlayStyle.light,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: const TextStyle(
+          fontFamily: _inter,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           letterSpacing: -0.01 * 18,
@@ -76,15 +82,17 @@ abstract final class CyberShieldTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(48),
           shape: const StadiumBorder(),
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: _inter,
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
-      snackBarTheme: SnackBarThemeData(
+      snackBarTheme: const SnackBarThemeData(
         backgroundColor: CyberShieldColors.surfaceContainerHigh,
-        contentTextStyle: GoogleFonts.inter(
+        contentTextStyle: TextStyle(
+          fontFamily: _inter,
           color: CyberShieldColors.onSurface,
         ),
       ),
@@ -92,7 +100,8 @@ abstract final class CyberShieldTheme {
     );
   }
 
-  static TextStyle labelBadge({Color? color}) => GoogleFonts.inter(
+  static TextStyle labelBadge({Color? color}) => TextStyle(
+        fontFamily: _inter,
         fontSize: 11,
         fontWeight: FontWeight.w700,
         height: 14 / 11,
@@ -100,8 +109,8 @@ abstract final class CyberShieldTheme {
         color: color ?? CyberShieldColors.onSurfaceVariant,
       );
 
-  static TextStyle labelCode({Color? color, FontWeight? weight}) =>
-      GoogleFonts.jetBrainsMono(
+  static TextStyle labelCode({Color? color, FontWeight? weight}) => TextStyle(
+        fontFamily: _mono,
         fontSize: 13,
         fontWeight: weight ?? FontWeight.w500,
         height: 18 / 13,
@@ -109,7 +118,8 @@ abstract final class CyberShieldTheme {
         color: color ?? CyberShieldColors.onSurfaceVariant,
       );
 
-  static TextStyle metricStat({Color? color}) => GoogleFonts.jetBrainsMono(
+  static TextStyle metricStat({Color? color}) => TextStyle(
+        fontFamily: _mono,
         fontSize: 28,
         fontWeight: FontWeight.w700,
         height: 32 / 28,
@@ -117,7 +127,8 @@ abstract final class CyberShieldTheme {
         color: color ?? CyberShieldColors.onSurface,
       );
 
-  static TextStyle headlineSm({Color? color}) => GoogleFonts.inter(
+  static TextStyle headlineSm({Color? color}) => TextStyle(
+        fontFamily: _inter,
         fontSize: 18,
         fontWeight: FontWeight.w600,
         height: 24 / 18,
@@ -125,7 +136,8 @@ abstract final class CyberShieldTheme {
         color: color ?? CyberShieldColors.onSurface,
       );
 
-  static TextStyle bodySm({Color? color}) => GoogleFonts.inter(
+  static TextStyle bodySm({Color? color}) => TextStyle(
+        fontFamily: _inter,
         fontSize: 12,
         fontWeight: FontWeight.w400,
         height: 16 / 12,
