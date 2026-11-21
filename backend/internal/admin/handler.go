@@ -118,7 +118,7 @@ func (h *Handler) Users(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Devices(w http.ResponseWriter, r *http.Request) {
-	filter := parseDeviceListFilter(r)
+	filter := resolveDeviceListFilter(w, r)
 	list, err := h.listDevices(200, filter)
 	if err != nil {
 		http.Error(w, err.Error(), 500)

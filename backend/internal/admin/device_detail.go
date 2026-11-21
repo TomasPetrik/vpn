@@ -49,7 +49,7 @@ func (h *Handler) DeviceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filter := parseDeviceListFilter(r)
+	filter := resolveDeviceListFilter(w, r)
 	list, err := h.listDevices(200, filter)
 	if err != nil {
 		http.Error(w, err.Error(), 500)

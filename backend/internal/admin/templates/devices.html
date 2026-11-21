@@ -35,7 +35,7 @@
     </div>
     <div class="master-list">
       {{range .Devices}}
-      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}?{{$.ListQuery}}">
+      <a class="master-item{{if eq $.SelectedID .ID}} active{{end}}" href="/admin/devices/{{.ID}}?{{$.Filter.Query}}{{if and $.Analytics $.Analytics.RangeKey}}&amp;range={{$.Analytics.RangeKey}}{{end}}">
         <div class="title">
           <span>{{if .Model}}{{.Model}}{{else}}{{.Platform}}{{end}}</span>
           <span class="muted">{{.Country}} · {{.Platform}}</span>

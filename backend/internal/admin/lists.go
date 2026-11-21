@@ -29,13 +29,34 @@ type deviceListFilter struct {
 	Country string // ISO code, "?" for unknown/empty, "" for all
 }
 
+const deviceListFilterCookie = "vpn_admin_devices_filter"
+
 func parseDeviceListFilter(r *http.Request) deviceListFilter {
 	q := r.URL.Query()
-	f := deviceListFilter{
-		Sort:    strings.ToLower(strings.TrimSpace(q.Get("sort"))),
-		Dir:     strings.ToLower(strings.TrimSpace(q.Get("dir"))),
-		Country: strings.ToUpper(strings.TrimSpace(q.Get("country"))),
+	// Prefer explicit query params (form submit / deep link). Otherwise restore
+	// the last selection from a long-lived cookie so list clicks / sidebar
+	// navigation keep sort, order and country forever.
+	if q.Has("sort") || q.Has("dir") || q.Has("country") {
+		return normalizeDeviceListFilter(deviceListFilter{
+			Sort:    strings.ToLower(strings.TrimSpace(q.Get("sort"))),
+			Dir:     strings.ToLower(strings.TrimSpace(q.Get("dir"))),
+			Country: strings.ToUpper(strings.TrimSpace(q.Get("country"))),
+		})
 	}
+	if c, err := r.Cookie(deviceListFilterCookie); err == nil && c.Value != "" {
+		vals, err := url.ParseQuery(c.Value)
+		if err == nil {
+			return normalizeDeviceListFilter(deviceListFilter{
+				Sort:    strings.ToLower(strings.TrimSpace(vals.Get("sort"))),
+				Dir:     strings.ToLower(strings.TrimSpace(vals.Get("dir"))),
+				Country: strings.ToUpper(strings.TrimSpace(vals.Get("country"))),
+			})
+		}
+	}
+	return normalizeDeviceListFilter(deviceListFilter{})
+}
+
+func normalizeDeviceListFilter(f deviceListFilter) deviceListFilter {
 	switch f.Sort {
 	case "created", "seen", "traffic":
 	default:
@@ -44,16 +65,30 @@ func parseDeviceListFilter(r *http.Request) deviceListFilter {
 	switch f.Dir {
 	case "asc", "desc":
 	default:
-		// Sensible defaults per sort key.
-		if f.Sort == "created" || f.Sort == "seen" || f.Sort == "traffic" {
-			f.Dir = "desc"
-		} else {
-			f.Dir = "desc"
-		}
+		f.Dir = "desc"
 	}
 	if f.Country == "UNKNOWN" {
 		f.Country = "?"
 	}
+	return f
+}
+
+func persistDeviceListFilter(w http.ResponseWriter, f deviceListFilter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     deviceListFilterCookie,
+		Value:    f.Query(),
+		Path:     "/admin",
+		MaxAge:   10 * 365 * 24 * 60 * 60, // ~10 years
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   true,
+	})
+}
+
+// resolveDeviceListFilter reads query/cookie and refreshes the persistent cookie.
+func resolveDeviceListFilter(w http.ResponseWriter, r *http.Request) deviceListFilter {
+	f := parseDeviceListFilter(r)
+	persistDeviceListFilter(w, f)
 	return f
 }
 
