@@ -956,10 +956,7 @@ class _ServerDetailCardState extends State<_ServerDetailCard> {
         };
         final vpnServer = connect.peer?.server ?? fallback;
         final vpnCountryCode = (vpnServer?.countryCode ?? 'DE').toUpperCase();
-        // TEMP: demo override — show Spain instead of detected local country (e.g. RU).
-        // Remove before shipping a real user-facing build.
-        final detectedLocalCountry = _localNetwork?.countryCode?.toUpperCase();
-        final localCountryCode = detectedLocalCountry == null ? null : 'ES';
+        final localCountryCode = _localNetwork?.countryCode?.toUpperCase();
 
         final isLocal = visual == _HubVisualState.disconnected;
         final flagCode = isLocal ? localCountryCode : vpnCountryCode;
