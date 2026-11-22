@@ -21,6 +21,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -61,7 +62,8 @@ android {
 
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            // Uncompressed + 16 KB zip-aligned .so (required for 16 KB page-size devices).
+            useLegacyPackaging = false
         }
     }
 }
@@ -71,7 +73,9 @@ flutter {
 }
 
 dependencies {
-    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    // 1.0.20260102+ ships 16 KB-aligned libwg*.so (Play rejects 1.0.20230706).
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("androidx.core:core-ktx:1.15.0")
 }
