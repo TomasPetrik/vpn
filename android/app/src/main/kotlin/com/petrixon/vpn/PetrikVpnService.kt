@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 
 /**
@@ -27,9 +28,17 @@ class PetrikVpnService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            ACTION_UPDATE -> {
+                ensureChannel()
+                val text = intent.getStringExtra(EXTRA_TEXT) ?: "VPN connected"
+                val notification = buildNotification(text)
+                NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+                return START_STICKY
+            }
             else -> {
                 ensureChannel()
-                val notification = buildNotification()
+                val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Connecting…"
+                val notification = buildNotification(text)
                 if (Build.VERSION.SDK_INT >= 34) {
                     ServiceCompat.startForeground(
                         this,
@@ -48,17 +57,22 @@ class PetrikVpnService : Service() {
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
+        // New channel id: Android never raises importance of an existing channel.
+        // IMPORTANCE_LOW was delayed/hidden on some OEMs (e.g. Samsung One UI).
         val channel = NotificationChannel(
             CHANNEL_ID,
             "PetrikVPN",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = "VPN connection status"
+            setSound(null, null)
+            enableVibration(false)
+            setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(contentText: String): Notification {
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         val pending = PendingIntent.getActivity(
             this,
@@ -68,25 +82,42 @@ class PetrikVpnService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("PetrikVPN")
-            .setContentText("VPN connected")
+            .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pending)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     companion object {
-        private const val CHANNEL_ID = "petrikvpn_tunnel"
+        // v2: DEFAULT importance (v1 was LOW and often delayed on OEM skins).
+        private const val CHANNEL_ID = "petrikvpn_tunnel_v2"
         private const val NOTIFICATION_ID = 42
         const val ACTION_STOP = "com.petrixon.vpn.STOP_FG"
+        private const val ACTION_UPDATE = "com.petrixon.vpn.UPDATE_FG"
+        private const val EXTRA_TEXT = "text"
 
-        fun start(context: Context) {
+        fun start(context: Context, text: String = "Connecting…") {
             val intent = Intent(context, PetrikVpnService::class.java)
+                .putExtra(EXTRA_TEXT, text)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
                 context.startService(intent)
+            }
+        }
+
+        fun updateConnected(context: Context) {
+            val intent = Intent(context, PetrikVpnService::class.java)
+                .setAction(ACTION_UPDATE)
+                .putExtra(EXTRA_TEXT, "VPN connected")
+            try {
+                context.startService(intent)
+            } catch (_: Exception) {
+                start(context, "VPN connected")
             }
         }
 

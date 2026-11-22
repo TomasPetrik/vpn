@@ -1,10 +1,14 @@
 package com.petrixon.vpn
 
+import android.Manifest
 import android.app.Activity
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.VpnService
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -27,6 +31,8 @@ class VpnEngineChannel(
     private var lastEmittedKey: String? = null
 
     var pendingPrepareResult: MethodChannel.Result? = null
+    private var pendingNotificationResult: MethodChannel.Result? = null
+    private var pendingNotificationMessage: String = "VPN permission granted"
 
     init {
         methodChannel.setMethodCallHandler(this)
@@ -118,17 +124,55 @@ class VpnEngineChannel(
     private fun prepareVpn(result: MethodChannel.Result) {
         val prepareIntent = VpnService.prepare(activity)
         if (prepareIntent == null) {
+            // VPN already allowed — next ask for notifications (separate from VPN dialog).
+            ensurePostNotificationsThenSucceed(result, "VPN permission already granted")
+            return
+        }
+        pendingPrepareResult = result
+        @Suppress("DEPRECATION")
+        activity.startActivityForResult(prepareIntent, PREPARE_REQUEST_CODE)
+    }
+
+    /**
+     * Android 13+ blocks notifications by default until POST_NOTIFICATIONS is granted.
+     * Manifest declaration alone is not enough. Do not fail VPN prepare if the user denies —
+     * the tunnel can still run; only the status notification may be hidden.
+     */
+    private fun ensurePostNotificationsThenSucceed(
+        result: MethodChannel.Result,
+        message: String,
+    ) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             result.success(
                 mapOf(
                     "granted" to true,
                     "status" to "ready",
-                    "message" to "VPN permission already granted",
+                    "message" to message,
                 ),
             )
             return
         }
-        pendingPrepareResult = result
-        activity.startActivityForResult(prepareIntent, PREPARE_REQUEST_CODE)
+        val granted = ContextCompat.checkSelfPermission(
+            activity,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            result.success(
+                mapOf(
+                    "granted" to true,
+                    "status" to "ready",
+                    "message" to message,
+                ),
+            )
+            return
+        }
+        pendingNotificationResult = result
+        pendingNotificationMessage = message
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            NOTIFICATION_REQUEST_CODE,
+        )
     }
 
     fun onActivityResult(requestCode: Int, resultCode: Int): Boolean {
@@ -138,13 +182,7 @@ class VpnEngineChannel(
         val pending = pendingPrepareResult ?: return true
         pendingPrepareResult = null
         if (resultCode == Activity.RESULT_OK) {
-            pending.success(
-                mapOf(
-                    "granted" to true,
-                    "status" to "ready",
-                    "message" to "VPN permission granted",
-                ),
-            )
+            ensurePostNotificationsThenSucceed(pending, "VPN permission granted")
         } else {
             pending.success(
                 mapOf(
@@ -154,6 +192,23 @@ class VpnEngineChannel(
                 ),
             )
         }
+        return true
+    }
+
+    fun onRequestPermissionsResult(requestCode: Int): Boolean {
+        if (requestCode != NOTIFICATION_REQUEST_CODE) {
+            return false
+        }
+        val pending = pendingNotificationResult ?: return true
+        pendingNotificationResult = null
+        // Always continue — notification grant is optional for tunnel connectivity.
+        pending.success(
+            mapOf(
+                "granted" to true,
+                "status" to "ready",
+                "message" to pendingNotificationMessage,
+            ),
+        )
         return true
     }
 
@@ -194,5 +249,6 @@ class VpnEngineChannel(
         const val CHANNEL_NAME = "vpn_engine"
         const val STATUS_CHANNEL_NAME = "vpn_engine/status"
         const val PREPARE_REQUEST_CODE = 9911
+        const val NOTIFICATION_REQUEST_CODE = 9912
     }
 }

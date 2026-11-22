@@ -48,19 +48,29 @@ class TunnelController(context: Context) {
         if (running) {
             stop()
         }
-        extensionStatus = "starting_transport"
-        val wstJson = buildWstunnelJson(config)
-        Log.i(TAG, "wstunnel start $wstJson")
-        WstunnelFfi.start(wstJson)
-        extensionStatus = "wstunnel_started"
-
-        extensionStatus = "starting_wireguard"
-        val wgConfig = buildWireGuardConfig(config)
-        backend.setState(tunnel, Tunnel.State.UP, wgConfig)
-        running = true
-        extensionStatus = "wireguard_started"
+        // Show the FGS notification immediately — before wstunnel/WG work — so the
+        // user sees status as soon as connect starts (not ~seconds after "connected").
         PetrikVpnService.start(appContext)
-        Log.i(TAG, "tunnel up")
+        try {
+            extensionStatus = "starting_transport"
+            val wstJson = buildWstunnelJson(config)
+            Log.i(TAG, "wstunnel start $wstJson")
+            WstunnelFfi.start(wstJson)
+            extensionStatus = "wstunnel_started"
+
+            extensionStatus = "starting_wireguard"
+            val wgConfig = buildWireGuardConfig(config)
+            backend.setState(tunnel, Tunnel.State.UP, wgConfig)
+            running = true
+            extensionStatus = "wireguard_started"
+            PetrikVpnService.updateConnected(appContext)
+            Log.i(TAG, "tunnel up")
+        } catch (e: Exception) {
+            PetrikVpnService.stop(appContext)
+            extensionStatus = "disconnected"
+            running = false
+            throw e
+        }
     }
 
     @Synchronized
