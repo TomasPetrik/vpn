@@ -215,6 +215,7 @@ func runServe(log *slog.Logger) error {
 	mux.Handle("GET /admin/users/{id}", adminH.RequireAuth(http.HandlerFunc(adminH.UserDetail)))
 	mux.Handle("GET /admin/devices", adminH.RequireAuth(http.HandlerFunc(adminH.Devices)))
 	mux.Handle("GET /admin/devices/{id}", adminH.RequireAuth(http.HandlerFunc(adminH.DeviceDetail)))
+	mux.Handle("GET /admin/analytics", adminH.RequireAuth(http.HandlerFunc(adminH.AnalyticsUsage)))
 	mux.Handle("GET /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsGet)))
 	mux.Handle("GET /admin/app-versions/{platform}", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsGet)))
 	mux.Handle("POST /admin/app-versions", adminH.RequireAuth(http.HandlerFunc(adminH.AppVersionsPost)))
